@@ -2,7 +2,9 @@
 
 ## Project Structure & Module Organization
 
-This repository is an ESP-IDF BSP and plugin firmware for the ESP32-C3-based FoloToy AI Passport.
+This repository is an independently maintained plugin-firmware derivative of
+`folotoy/ai-passport` for the ESP32-C3-based FoloToy AI Passport. It is not an
+upstream mirror; see `docs/PROJECT_ORIGIN.md` before importing upstream changes.
 
 - `components/bsp/include/`: public BSP APIs and the hardware pin/configuration source of truth (`bsp_pins.h`).
 - `components/bsp/src/`: display, button, audio, battery, and shared-I2C implementations.
@@ -12,7 +14,7 @@ This repository is an ESP-IDF BSP and plugin firmware for the ESP32-C3-based Fol
 - `tools/`: package compiler/signer, font generator, BLE sender, and release helpers.
 - `tests/`: host-side tests for portable logic, package tooling, fonts, and reference plugins.
 - `sdkconfig.defaults`: reproducible target, console, LVGL, and memory defaults.
-- `README.md`: wiring, known hardware traps, and the required on-device acceptance checklist.
+- `README.md`: product scope, build/install entry points, upstream relationship, and documentation map.
 
 Keep reusable hardware logic in `components/bsp`; keep board demonstration and UI behavior in `main`.
 

@@ -5,6 +5,10 @@ Manifest v5、字节码 v1、Host API v5。本文既是快速上手教程，也�
 固件整体架构、BLE 协议、Flash 分区和实机验收见
 [`PLUGIN_SYSTEM.md`](PLUGIN_SYSTEM.md)。
 
+本规范属于 `rvaim/ai-passport` 衍生固件，不是上游
+[`folotoy/ai-passport`](https://github.com/folotoy/ai-passport) 的通用插件标准。项目来源与
+兼容边界见 [`PROJECT_ORIGIN.md`](PROJECT_ORIGIN.md)。
+
 > 这里的“插件”不是 ESP-IDF 原生代码，也不是动态链接库。插件源码是受约束的 JSON，
 > 经工具编译成固定字节码、签名为 `.fpp`，再由设备上的有界 VM 执行。插件不能获得任意
 > 指针，也不能直接调用 LVGL、FreeRTOS、ESP-IDF、NVS 或硬件驱动。
@@ -13,7 +17,7 @@ Manifest v5、字节码 v1、Host API v5。本文既是快速上手教程，也�
 
 ### 1.1 安装工具依赖
 
-在 `firmware/` 目录执行：
+在仓库根目录执行：
 
 ```bash
 python3 -m pip install -r tools/requirements.txt

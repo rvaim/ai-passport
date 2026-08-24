@@ -1,6 +1,9 @@
-# FoloToy AI Passport AI 硬件开发指南
+# AI Passport 插件固件：硬件与 BSP 开发指南
 
-本文是面向 AI 编程助手和新开发者的板级上下文入口。目标不是替代数据手册，而是准确说明**当前仓库已经确认的硬件事实、软件架构、不可随意改变的约束、扩展方式和验收方法**。
+本文是本衍生固件的板级上下文入口，面向 AI 编程助手和新开发者。BSP 起点来自
+[`folotoy/ai-passport`](https://github.com/folotoy/ai-passport)，但本文记录的是**当前仓库**
+实际采用的硬件事实、软件约束、扩展方式和验收方法，不是 FoloToy 官方硬件规格，也不替代
+器件数据手册。项目来源和修改边界见 [`PROJECT_ORIGIN.md`](PROJECT_ORIGIN.md)。
 
 > 信息优先级：实际原理图/PCB 与实机结果 > `components/bsp/include/bsp_pins.h` > BSP 实现与本文件 > README。若几处信息冲突，不要凭经验猜测；应先指出冲突并请求原理图、板卡版本或实测结果。
 
@@ -16,7 +19,8 @@ AI 应先完成以下检查：
 
 ## 2. 硬件总览
 
-当前代码针对 ESP32-C3 FoloToy AI Passport，使用 ESP-IDF 5.5.x（已知开发环境为 5.5.3）。MCU **没有 PSRAM**，外设 DMA 和 UI 都使用内部 RAM。
+当前代码针对 ESP32-C3 FoloToy AI Passport 板卡，使用 ESP-IDF 5.5.x（已验证环境为
+5.5.3）。目标设备 **没有 PSRAM**，外设 DMA、VM 和 UI 都使用内部 RAM。
 
 | 子系统 | 器件/方式 | 总线或资源 | 当前状态 |
 | --- | --- | --- | --- |
@@ -133,7 +137,8 @@ LVGL 非线程安全：
 - UP/DOWN 导航直接消费 PRESS，每次按下立即响应；不消费多击分类后的 CLICK/DOUBLE。
 - OK 短按消费 CLICK；OK 持续 600 ms 的 LONG 被 Registry 派发为 back，逐层返回；没有
   back handler 或已到功能顶层时才回主页。
-- 驱动使用上游允许的最小 1 个采样周期识别。三键共用一个 ADC 电压档，不能可靠实现 UP+DOWN 同时按组合键。
+- 驱动把 button 组件的连续识别周期设为其支持的最小值 1；这不是额外的应用层防抖。
+  三键共用一个 ADC 电压档，不能可靠实现 UP+DOWN 同时按组合键。
 
 重标阈值时，使用临时诊断构建或 USB 日志调用 `bsp_button_read_mv()`，逐个按键记录稳定
 电压；采集多块板、不同电量和合理温度范围的数据，再把相邻分布之间留裕量设置为边界。
@@ -193,7 +198,9 @@ SOC 准确度取决于电芯与 profile 的匹配程度。本驱动给出的是�
 
 ## 10. Flash、控制台和资源预算
 
-FoloToy AI Passport 的所有硬件批次均使用 8 MB Flash，`sdkconfig.defaults` 因此固定使用 8 MB Flash 镜像配置；烧录时仍允许按实际探测容量更新镜像头。若实机探测结果不是 8 MB，应视为硬件、料号或连接异常并先确认，不能为了让未知板卡启动而把项目默认值降为 4 MB。
+本仓库当前目标和已验证设备使用 8 MB Flash，`sdkconfig.defaults` 因此固定生成 8 MB
+镜像；这不是对所有未知板卡批次的规格声明。若实机探测结果不是 8 MB，应先确认板卡来源、
+Flash 料号和连接，再决定是否建立新的硬件配置，不能为了让未知板卡启动而静默降低默认值。
 
 控制台固定为 USB Serial/JTAG，不使用 UART0 默认输出，因为其 TX GPIO21 与背光冲突。任何日志接口修改都必须同时检查引脚占用。
 
@@ -271,24 +278,15 @@ source "$HOME/esp/esp-idf-v5.5.3/export.sh"
 idf.py --version
 ```
 
-版本输出应为 ESP-IDF v5.5.3。仓库维护者若已提供 `get_idf553` shell 快捷命令，也可以用它代替 `source .../export.sh`，但该命令不是仓库文件的一部分，不能假设所有机器都存在。
-
-可选地在自己的 shell 配置中定义快捷函数：
-
-```bash
-get_idf553() {
-    source "$HOME/esp/esp-idf-v5.5.3/export.sh"
-}
-```
-
-修改 `~/.bashrc` 或 `~/.zshrc` 属于用户级环境变更，AI 执行前应获得用户授权；仅在文档中给出示例不代表可以自动修改。
+版本输出应为 ESP-IDF v5.5.3。任何本地 shell 快捷命令都不是仓库接口，文档和自动化不能
+假设它存在。
 
 ### 12.3 获取工程依赖并首次构建
 
 进入项目根目录后执行：
 
 ```bash
-get_idf553                    # 或 source 对应 export.sh
+source /path/to/esp-idf-v5.5.3/export.sh
 idf.py set-target esp32c3
 idf.py reconfigure
 idf.py build

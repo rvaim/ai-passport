@@ -1,219 +1,174 @@
-# FoloToy AI Passport
+# AI Passport 插件固件
 
 [English](README.md) | 简体中文
 
-FoloToy AI Passport 是一个面向 AI agent 的开放式可穿戴 AI 硬件，本仓库是这款 AI 硬件的开发基线。它不只展示“板子能运行什么”，还把 agent 开发应用所需的**硬件事实、稳定接口、资源边界、参考实现和验收方法**放在同一仓库中。
+这是一个面向 **FoloToy AI Passport 硬件**的社区衍生固件，重点不是继续扩充固定 Demo，
+而是把设备改造成一个可以安装受约束插件的离线小型平台。
 
-当前分支提供 Cordis 思路的插件壳：内置能力与下载包共用一个 Registry 和生命周期。
-插件通过 Chrome Web Bluetooth 与固定设备码安装，设备本身不加入网络。固件架构、BLE、
-Flash 和验收流程见 [`docs/PLUGIN_SYSTEM.md`](docs/PLUGIN_SYSTEM.md)；JSON 字段、完整指令集、
-权限、14 px 公共字库、开发测试和发布规范见
-[`docs/PLUGIN_DEVELOPMENT_GUIDE.md`](docs/PLUGIN_DEVELOPMENT_GUIDE.md)。
+本项目基于 FoloToy 的开源项目
+[`folotoy/ai-passport`](https://github.com/folotoy/ai-passport) 修改，复用了其 ESP32-C3
+硬件支持与 BSP 基础，但本仓库不是上游镜像，也不是 FoloToy 官方固件。插件 VM、统一
+Registry、主题系统、设备码、Web Bluetooth 安装、Nearby Runtime Gateway 以及本仓库的
+产品界面均属于这个衍生项目的后续设计。详细来源与差异见
+[`docs/PROJECT_ORIGIN.md`](docs/PROJECT_ORIGIN.md)。
 
-Host API v5 提供可选的语义 UI、统一底部动作栏、异步确认弹窗、运行时主题和系统 Nearby，
-同时保留
-游戏等插件需要的自由绘制。主页、内置设置、插件管理、Counter、Settings 与 Meteor Tap
-遵守同一组件规范；Meteor Tap 只把自绘游戏主体保留为独立视觉。主题会自动作用于宿主组件，
-Canvas 插件也可用 `theme:token` 主动跟随主题。设置插件可操作亮度、音量、按键音、自动
-息屏、主题和统一设备信息页，失败或卸载时仍回退内置设置。通信插件只能前台运行，可申请
-设备码校验后的消息、Blob 和半双工语音能力；退出或故障时系统强制回收全部资源。
+## 项目目标
 
-这个仓库的组织方式是：
-
-- `main` 是最小但完整的可运行基线，也是当前硬件能力的可执行说明；
-- `components/bsp` 隔离板级差异，为应用提供稳定 API；
-- `demo/*` 分支展示从需求到成品的不同实现路径；
-- `AGENTS.md` 约束 agent 的仓库操作，`docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md` 提供完整硬件上下文和故障知识；
-- 构建结果与真机结果分开记录，禁止把“编译通过”描述成“硬件验证通过”。
-
-理想的使用方式是：把仓库和一句应用需求交给 agent。agent 先从这里识别能力与限制，再选择相关示例、实现、构建，并给出可在真机上执行的验收清单。
-
-## 给 AI agent 的入口
-
-开始开发前，按以下顺序建立上下文：
-
-1. 阅读 `AGENTS.md`、本 README 和 [`docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md`](docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md)。
-2. 执行 `git status --short --branch`，保留用户已有改动。
-3. 阅读需求会触及的 `components/bsp/include/*.h` 及其实现，不根据芯片或开发板的常见配置猜测本板行为。
-4. 用 `git branch -r --list 'origin/demo/*'` 查找接近需求的示例，只复用相关设计，不默认合并整个示例分支。
-5. 将需求拆成输入、输出、状态、并发任务、持久化、内存预算和失败降级，再决定修改 `main` 还是扩展 `components/bsp`。
-6. 完成最低构建检查和适用的逻辑测试；所有依赖屏幕、按键、音频、电池或时序的结论均保留真机验收项。
-
-### 事实来源优先级
-
-发生冲突时，使用以下优先级：
+传统 MCU 固件通常把每项功能直接编译进应用。这个项目改用两层结构：底层固件只负责硬件、
+资源隔离和稳定的系统 API；上层功能尽量通过可安装的 `.fpp` 包交付。
 
 ```text
-原理图 / PCB / 板卡版本 / 实机测量
-    > components/bsp/include/bsp_pins.h
-    > BSP 公开头文件与实现
-    > docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md
-    > README 与示例应用
+AI Passport 硬件
+  └─ ESP-IDF + BSP
+      └─ 系统服务：显示 / 按键 / 音频 / 存储 / 身份 / BLE
+          └─ Registry + Host API v5 + 有界字节码 VM
+              ├─ 系统插件：设置、插件管理
+              ├─ 下载插件：工具、游戏、通信应用
+              └─ 主题插件：替换共享 UI Token
 ```
 
-当前仓库尚未包含原理图和 PCB 源文件。遇到板卡版本、接线、极性、寄存器或未使用 GPIO 等未知信息时，agent 应明确报告未知项并请求证据，不能用其他 ESP32-C3 开发板的参数补全答案。
+插件只在前台运行。插件退出、长按返回、启动失败或 VM 异常时，宿主会统一停止定时器、音频、
+BLE 与传输任务，并回收缓冲区和文件句柄。插件主动 `release` 是良好习惯，但不是系统正确性
+的前提。
 
-## 硬件能力契约
+## 当前能力
 
-下表描述的是当前 `main` 已提供的应用能力，而不是芯片数据手册中所有可能的能力。
+当前固件版本为 **V2.6.0**，插件格式固定为 Manifest v5 / Host API v5。
 
-| 能力 | 已确认实现 | 应用接口 | 必须遵守的边界 |
-| --- | --- | --- | --- |
-| 显示 | ST7789P3，240 × 320，竖屏 RGB565，SPI2 40 MHz；LEDC 背光 | `bsp_display_*`、`bsp_lvgl_*` | ESP32-C3 无 PSRAM；当前为小型单 DMA 缓冲；没有 LCD MISO、触摸或已知 TE 接口 |
-| 输入 | `UP` / `DOWN` / `OK` 三键，共用 GPIO0 的 ADC 电阻分压 | `bsp_button_init()`、`bsp_button_read_mv()` | 回调运行在 button 组件任务中，不能阻塞；不能再创建第二个 ADC1 unit |
-| 音频 | ES8311，I2S0 全双工 PCM，可播放和麦克风录音 | `bsp_audio_*` | PCM 读写为阻塞调用，应放工作任务；格式切换必须保留 BSP 内的 close/open 流程 |
-| 电池 | CW2017 的 SOC 与电压读取 | `bsp_battery_*` | 是可缺省能力；读数精度取决于电芯与 profile，不能等同于已标定结果 |
-| 共享总线 | ES8311 与 CW2017 共用 I2C0 | `bsp_i2c_*` | 所有设备复用 BSP 持有的总线；不能为扫描或新设备再创建同端口总线 |
-| 日志与烧录 | ESP32-C3 原生 USB Serial/JTAG | ESP-IDF console | GPIO18/19 保留给 USB；UART0 默认 TX GPIO21 与背光冲突 |
+| 能力 | 当前实现 |
+| --- | --- |
+| 应用目录 | 系统能力与下载应用共用一个 Registry；主页不维护第二份列表 |
+| 插件包 | JSON 源码编译为有界字节码，经 ECDSA P-256 签名后生成 `.fpp` |
+| UI | 可选语义组件、公共状态栏/动作栏/弹窗/主题，也允许游戏自行绘制 Canvas |
+| 中文字体 | 下载插件统一使用公共 14 px 字体；打包时检查字符覆盖，避免安装后出现白块 |
+| 设置 | 亮度、音量、按键音、自动息屏、主题和设备信息 |
+| 安装 | Chrome Web Bluetooth 连接无配对 BLE GATT；设备端仍需按 OK 批准 |
+| Nearby | 设备码同步后的消息、Blob 文件和 16 kHz 半双工语音 |
+| 生命周期 | 单前台 VM、代次隔离、退出强制回收、迟到事件丢弃 |
+| 数据 | 插件私有整数 KV、4 个 4096-byte RAM buffer、单个 768 KiB 临时 Blob |
 
-所有引脚、地址、面板参数和按键电压窗口只在 [`components/bsp/include/bsp_pins.h`](components/bsp/include/bsp_pins.h) 定义。应用代码不得复制这些常量。完整引脚表、面板初始化、ADC 阈值、I2C 地址规则、音频时钟和内存说明见 [AI 硬件开发指南](docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md)。
+Nearby 的设备码用于确认网页连接的是目标设备，不是密码。每次 BLE 重连都必须重新同步。
+下载插件不能直接访问 NimBLE、Wi-Fi、Socket、LVGL、FreeRTOS、NVS 或任意内存指针；它们
+只能调用 Manifest 权限允许的 Host API。本版本没有 Wi-Fi、SoftAP 或 HTTP 安装后端。
 
-应用也可以使用 ESP-IDF 提供的定时器、FreeRTOS 任务和内部 Flash/NVS。当前产品在进入
-“插件”系统页时启动 BLE 安装服务；前台下载插件声明 `nearby` 并 acquire 后可启动固定的
-Runtime GATT Gateway，但不能直接访问 NimBLE/Wi-Fi/Socket。固件不启动 Wi-Fi、SoftAP 或
-设备 HTTP 服务。`demo/claude-buddy-port` 只能作为其他 BLE 架构参考，不能替代
-对当前板卡天线、射频表现、功耗和共存行为的实测。所有 FoloToy AI Passport 均配备
-8 MB Flash，默认固件配置也以 8 MB 为准。
+## 目标硬件
 
-### 不属于当前能力契约的事项
+固件面向上游项目所支持的 ESP32-C3 AI Passport 板卡。以下是本仓库代码和已连接设备验证过
+的配置，不代表 ESP32-C3 芯片本身的全部能力：
 
-仓库目前没有足够证据保证以下能力：触摸、屏幕读回、IMU、外部存储、充电控制、USB 插拔检测、可控功放使能、深度睡眠唤醒、任意“空闲 GPIO”、电池精确容量或量产级电源指标。ESP32-C3 芯片具备某项功能，不代表这块板已经接出、供电正确或经过验证。
+| 子系统 | 配置 |
+| --- | --- |
+| MCU / Flash | ESP32-C3，8 MB Flash，无 PSRAM |
+| 屏幕 | ST7789P3，240 × 320，SPI RGB565 |
+| 输入 | UP / DOWN / OK 三键，共用 GPIO0 ADC 电阻梯 |
+| 音频 | ES8311，I2S 播放与麦克风采集 |
+| 电量 | CW2017，通过共享 I2C 读取 SOC 与电压 |
+| 调试 | ESP32-C3 原生 USB Serial/JTAG |
 
-需要这些能力时，先补充原理图、板卡修订号、器件资料或实测结果，再扩展 BSP 和验收项。
+引脚、ADC 电压窗、面板初始化和线程约束以
+[`components/bsp/include/bsp_pins.h`](components/bsp/include/bsp_pins.h) 与
+[`docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md`](docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md)
+为准。仓库没有原理图、PCB 或 BOM，因此不能凭空承诺触摸、IMU、外部存储、充电控制或
+任意“空闲 GPIO”。
 
-## 用一句需求开始开发
+## 快速开始
 
-简单需求可以直接这样交给 agent：
+准备以下环境：
 
-```text
-请基于 main 分支为 FoloToy AI Passport 开发一个离线习惯打卡应用。
-使用三个实体按键和 240×320 屏幕，记录保存在掉电不丢失的存储中。
-遵守 AGENTS.md 和 AI_HARDWARE_DEVELOPMENT_GUIDE.md；先查找相关 demo 分支，
-保持硬件逻辑在 components/bsp、应用逻辑在 main，完成可运行实现与测试，
-最后分别报告构建结果、未执行的真机项目和逐项验收方法。
-```
-
-需求越具体，agent 越容易一次实现正确。建议说明：
-
-- 用户流程：每个页面显示什么，三个按键的短按、双击、长按分别做什么；
-- 状态与数据：是否计时、断电保存、联网、录音或与电脑通信；
-- 体验目标：字体、颜色、动画、声音、响应时间和异常状态；
-- 限制条件：是否允许替换主菜单、增加依赖、使用 Flash 或改变默认交互；
-- 验收标准：哪些行为必须自动测试，哪些必须在真实硬件观察。
-
-若需求没有给出所有细节，agent 可以在不改变产品方向的范围内采用保守默认值，但应在交付中列出这些假设。涉及新接线、电源安全、硬件版本或不可恢复数据格式的决定必须先确认。
-
-## 示例分支是设计案例，不是功能堆叠
-
-每个 `demo/*` 分支都从基线演化出一个独立应用。它们的价值是展示具体问题的实现方式；新应用通常应从 `main` 建分支，按需参考，而不是把多个 demo 整体合并。
-
-| 分支 | 展示的应用 | 值得复用的模式 |
-| --- | --- | --- |
-| `demo/stopwatch` | 秒表 | 最小计时应用、纯逻辑与 LVGL 分离、主机逻辑测试 |
-| `demo/cat-themed-pomodoro-timer` | 猫咪养成番茄钟 | 单调时钟、暂停/恢复、NVS 持久化、较完整的 PRD 与状态模型 |
-| `demo/rock-paper-scissors` | 石头剪刀布 | RGB565 图片资产、素材生成脚本、Flash 资源权衡 |
-| `demo/tetris-game` | 三键俄罗斯方块 | 实时游戏循环、低延迟 `PRESS` 输入、局部刷新、纯游戏模型、音效与麦克风交互 |
-| `demo/claude-buddy-port` | 桌面 AI 硬件伴侣 | 用完整应用替换 demo 菜单、加密 BLE、协议解析、状态归约、任务通信和较完整的主机测试 |
-
-查看示例而不切换当前工作区：
+- ESP-IDF 5.5.x；当前已验证版本为 5.5.3；
+- Python 3；插件工具需要 `cryptography`，BLE 命令行工具需要 `bleak`；
+- 桌面版或 Android Chrome，用于 Web Bluetooth 安装。
 
 ```bash
-git branch -r --list 'origin/demo/*'
-git diff main...origin/demo/tetris-game -- main components tests
-git show origin/demo/tetris-game:main/demo_tetris.c
-```
+git clone https://github.com/rvaim/ai-passport.git
+cd ai-passport
 
-开始新应用：
-
-```bash
-git switch main
-git switch -c feature/my-passport-app
-```
-
-示例分支之间可能改变了同一菜单、配置或驱动。agent 应先理解差异，再提取状态模型、资源流水线或并发模式；不能因为代码曾出现在示例分支，就把它当成当前 `main` 的 BSP 保证。
-
-## 应用与 BSP 的边界
-
-```text
-自然语言需求
-  └─ main/                         页面、状态机、动画、业务任务、应用资源
-      └─ components/bsp/include/  稳定的板级 API
-          └─ components/bsp/src/  GPIO、总线、器件和驱动细节
-              └─ bsp_pins.h       引脚与硬件参数的单一事实来源
-```
-
-新增内置能力时，实现 `enter`、`exit`、`key` 和可选 `back` 生命周期，并在
-`main/app_registry.c` 注册一个系统插件 descriptor；同时声明依赖的显示、存储、音频、
-电池、身份或近场服务。可下载功能优先使用 `.fpp` VM，不再创建第二套菜单或应用列表。
-
-只有多个应用都会使用的硬件能力才进入 `components/bsp`。BSP API 需要说明阻塞性、线程上下文、内存所有权、失败值和初始化顺序；引脚或 I2C 地址只能加入 `bsp_pins.h`。
-
-### 运行时不可破坏的规则
-
-- LVGL 不是线程安全的；非 LVGL 上下文操作 `lv_*` 对象必须持有 `bsp_lvgl_lock()`。
-- 按键回调只派发轻量事件；录音、播放、存储和其他慢操作放到工作任务。
-- 页面退出时先停止可能访问 UI 的任务或定时器，再删除 screen 并清空对象指针。
-- 全局交互默认是 `UP`/`DOWN` 导航、OK 单击进入、OK 长按返回上一层；没有 back handler 的下载插件返回主页。
-- 新图片、字体、网络栈、音频缓存、LVGL buffer 或任务栈都要评估内部 RAM；总空闲堆足够不代表存在足够大的连续内存块。
-- 可测试的状态机、协议、计时和布局计算应与 ESP-IDF/LVGL 分离，优先加入主机逻辑测试。
-
-## 构建与运行基线
-
-项目使用 ESP-IDF 5.5.x，已知环境为 5.5.3：
-
-```bash
-get_idf553                    # 维护者本机快捷命令
-# 或 source "$HOME/esp/esp-idf-v5.5.3/export.sh"（示例安装路径）
-idf.py set-target esp32c3     # 新 checkout 或曾配置其他目标时执行
-idf.py build
-idf.py flash monitor
-```
-
-首次构建会通过 ESP-IDF Component Manager 获取 LVGL、`esp_lvgl_port`、`button` 和 `esp_codec_dev` 等依赖。不要直接修改生成的 `managed_components/`。配置陈旧时可以使用 `idf.py fullclean` 后重新配置，但不要用它清理用户源码改动。
-
-构建 ESP-IDF 目标前先运行完整主机测试：
-
-```bash
+python3 -m pip install -r tools/requirements.txt
 tests/run_host_tests.sh
+
+source /path/to/esp-idf-v5.5.3/export.sh
+idf.py set-target esp32c3
+idf.py build
+idf.py -p PORT flash monitor
 ```
 
-它会检查字体、包格式与 VM、设备码、插件管理状态模型、Nearby 帧和 ADPCM、参考插件及
-Python 工具。不同示例
-分支可能提供额外命令，应以该分支 README 为准。
+`tests/run_host_tests.sh` 会检查字体覆盖、包格式、VM、设备码、插件管理模型、Nearby 帧与
+ADPCM、参考插件和 Python 工具。`idf.py build` 只证明目标可以编译；屏幕、三键、音频、
+电量和 BLE 行为仍需在真机上验收。
 
-## 验收与交付格式
+## 安装插件
 
-`idf.py build` 是最低自动检查，不是硬件验收。涉及实体外设的改动，至少在 FoloToy AI Passport 上记录：
+1. 在设备主页进入“插件”，记下设备码并保持该页面打开。
+2. 在仓库根目录启动静态服务：
 
-- USB Serial/JTAG 有稳定启动日志，无重启循环、assert 或 watchdog；
-- 显示方向、颜色、边缘、刷新与背光正确；
-- `UP` / `DOWN` / `OK` 的目标事件和长按返回正确；
-- 音频采样速度、播放、非零录音和页面退出正确；
-- 电池读数合理，CW2017 缺失时应用能安全降级；
-- 重复进出页面和并发操作后没有任务、对象或堆持续泄漏。
+   ```bash
+   python3 -m http.server 8000 --directory web
+   ```
 
-agent 的最终交付应明确区分：
+3. 用桌面或 Android Chrome 打开 `http://localhost:8000/installer.html`。
+4. 输入设备码并选择 `Passport-XXXX`。Chrome 首次授权必须显示设备选择器，这是浏览器规则。
+5. 选择 `.fpp` 文件并发送；设备验签后短按 OK 批准。
+
+网页只有在设备停留于“插件”页时才能发现 Installer Service。普通 app 打开并申请 Nearby
+后，固件会切换到另一套 Runtime Service；两种 BLE profile 不会同时运行。
+
+参考包源码位于 [`examples/plugins/`](examples/plugins/)：
+
+- `counter`：状态、按键与 KV；
+- `settings`：系统设置和语义 UI；
+- `meteor-tap`：自绘游戏界面；
+- `midnight-theme`：纯数据主题；
+- `nearby-demo`：消息、Blob 和前台通信租约。
+
+仓库默认忽略生成的 `.fpp` 和私钥。若要自己打包，请先阅读完整规范，不要把
+`.keys/plugin-signing-private.pem` 提交到 Git。
+
+## 开发插件
+
+插件唯一人工维护的源码是 `plugin.json`。下面的命令会校验 schema、权限、字体、跳转目标、
+状态槽和 Host API 版本，然后签名：
+
+```bash
+python3 tools/plugin_tool.py pack \
+  examples/plugins/counter/plugin.json \
+  --private .keys/plugin-signing-private.pem \
+  --output /tmp/counter.fpp
+
+python3 tools/plugin_tool.py inspect /tmp/counter.fpp
+```
+
+插件不是本地动态库，也不能装入原生 C 代码。需要新的通用能力时，应先把能力设计成有界的
+宿主服务，再通过权限和 Host API 暴露，而不是让插件绕过系统直接访问硬件。
+
+## 文档导航
+
+| 文档 | 内容 |
+| --- | --- |
+| [`PLUGIN_DEVELOPMENT_GUIDE.md`](docs/PLUGIN_DEVELOPMENT_GUIDE.md) | JSON 规范、指令集、UI、权限、签名、测试与发布清单 |
+| [`PLUGIN_SYSTEM.md`](docs/PLUGIN_SYSTEM.md) | Registry、VM、BLE 协议、Flash 布局和生命周期实现 |
+| [`AI_HARDWARE_DEVELOPMENT_GUIDE.md`](docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md) | 当前板卡事实、BSP、内存、线程规则和真机验收 |
+| [`PROJECT_ORIGIN.md`](docs/PROJECT_ORIGIN.md) | 上游来源、继承范围、主要差异与同步原则 |
+| [`AGENTS.md`](AGENTS.md) | 在本仓库工作的代码、验证和提交约束 |
+
+## 仓库结构
 
 ```text
-Build: PASS / FAIL / NOT RUN
-Host tests: PASS / FAIL / NOT RUN
-Device tests: PASS / FAIL / NOT RUN
-Unverified: 仍需板卡、仪器或用户确认的事项
+components/bsp/             上游基础上继续维护的板级驱动
+components/plugin_runtime/  包格式、签名、Flash 槽、安装器与字节码 VM
+main/                       Registry、系统插件、宿主服务、Nearby 与产品 UI
+examples/plugins/           参考插件 JSON 源码
+tools/                      打包、字体、BLE 安装和 Nearby 客户端工具
+tests/                      可在电脑运行的协议、模型、VM、字体和插件测试
+web/                        本地 Web Bluetooth 安装页
+docs/                       架构、开发规范、硬件事实和项目来源
 ```
 
-按引脚、LCD、ADC、codec、I2C、DMA 等修改类型展开的验收矩阵和故障速查表见 [AI 硬件开发指南](docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md)。
+## 上游与许可证
 
-## 项目结构
+上游项目：[`folotoy/ai-passport`](https://github.com/folotoy/ai-passport)。原项目由 FoloToy
+以 MIT License 发布；本仓库保留原始 [`LICENSE`](LICENSE) 和版权声明。修改版同样按该
+许可证条款分发。
 
-```text
-components/bsp/include/  BSP 公开 API 与 bsp_pins.h 硬件事实
-components/bsp/src/      显示、按键、音频、电池、共享 I2C 实现
-components/plugin_runtime/ 包格式、签名、槽存储、安装器与字节码 VM
-main/                    产品壳、Registry、系统插件、宿主与 LVGL UI
-examples/plugins/        JSON 插件源码与已签名参考包
-tools/                   插件、字体、BLE、刷写和发布工具
-tests/                   可脱离硬件运行的运行时、模型、插件、字体和工具测试
-docs/                    硬件、插件系统与插件开发文档
-sdkconfig.defaults       ESP32-C3、USB console、Flash、LVGL 默认配置
-AGENTS.md                agent 在本仓库的编码、验证和提交规则
-```
+“FoloToy”与“AI Passport”用于说明兼容硬件和代码来源，不表示上游为本衍生项目提供背书。
+提交问题时请先确认问题属于本仓库插件固件还是上游硬件/BSP，避免把衍生功能问题提交给
+上游维护者。

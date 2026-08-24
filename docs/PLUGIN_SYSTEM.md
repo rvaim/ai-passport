@@ -1,9 +1,12 @@
 # Passport 插件固件 V2.6.0
 
-本文档描述 `feature/plugin-firmware` 上的插件固件。目标设备是 ESP32-C3、8 MB
-Flash、无 PSRAM 的 FoloToy AI Passport。V2 以 Cordis 的 Context、Registry、Service
-和生命周期思想为参考，但没有在 MCU 上移植 JavaScript：系统能力和下载包都注册为插件，
-下载插件仍运行在固定预算的字节码 VM 中。
+本文档描述本仓库 `main` 上的插件固件。它是基于
+[`folotoy/ai-passport`](https://github.com/folotoy/ai-passport) BSP 演进的社区衍生项目，
+目标设备为 ESP32-C3、8 MB Flash、无 PSRAM 的 FoloToy AI Passport。它不是上游官方
+插件接口；来源与修改范围见 [`PROJECT_ORIGIN.md`](PROJECT_ORIGIN.md)。
+
+V2 借鉴 Cordis 的 Context、Registry、Service 和生命周期思想，但没有在 MCU 上移植
+JavaScript：系统能力和下载包都注册为插件，下载插件运行在固定预算的字节码 VM 中。
 
 面向插件作者的 JSON 字段、完整指令集、权限、字体/UI、签名、测试和发布规范见
 [`PLUGIN_DEVELOPMENT_GUIDE.md`](PLUGIN_DEVELOPMENT_GUIDE.md)。本文聚焦固件架构、传输、
@@ -49,7 +52,7 @@ Manifest 权限检查服务。不可用的条目仍可见，但不能进入。
 
 - UP/DOWN 使用 `BUTTON_PRESS_DOWN`，每次物理按下立即产生一次导航事件；不再等待
   180 ms 多击分类，因此快速连续按键不会被合并为一次 double-click。
-- 按键驱动只保留上游允许的最小 1 个采样周期识别，不增加应用层防抖。
+- 按键驱动把 button 组件连续识别周期设为其支持的最小值 1，不增加应用层防抖。
 - OK 短按打开或确认。
 - 长按 OK 600 ms 返回上一层：确认框回插件列表，设备信息回设置列表；只有功能顶层的
   上一层才是主页。
