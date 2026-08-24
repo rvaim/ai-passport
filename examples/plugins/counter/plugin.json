@@ -1,0 +1,63 @@
+{
+  "id": "dev.folotoy.counter",
+  "name": "计数器",
+  "author": "FoloToy",
+  "version": 3,
+  "host_api": 5,
+  "permissions": ["storage", "audio"],
+  "state_slots": 3,
+  "templates": {
+    "render": [
+      ["ui_screen", "计数器"],
+      ["ui_value_card", "当前计数", "integer", 0, ""],
+      ["ui_action_bar", "调整", "清零", "返回"],
+      ["ui_commit"],
+      ["end"]
+    ]
+  },
+  "handlers": {
+    "start": [
+      ["kv_load", 0, "count", 0],
+      ["include", "render"]
+    ],
+    "up": [
+      ["load_state", 0],
+      ["push", 1],
+      ["add"],
+      ["store_state", 0],
+      ["kv_save", 0, "count"],
+      ["tone", 880, 35],
+      ["include", "render"]
+    ],
+    "down": [
+      ["load_state", 0],
+      ["push", 1],
+      ["sub"],
+      ["store_state", 0],
+      ["kv_save", 0, "count"],
+      ["tone", 660, 35],
+      ["include", "render"]
+    ],
+    "ok": [
+      ["ui_dialog_confirm", 1, "确认清零?", "计数将恢复为 0", "取消", "清零"],
+      ["end"]
+    ],
+    "action": [
+      ["event_load", "id", 1],
+      ["event_load", "value", 2],
+      ["load_state", 1],
+      ["push", 1],
+      ["eq"],
+      ["jz", "action_done"],
+      ["load_state", 2],
+      ["jz", "action_done"],
+      ["push", 0],
+      ["store_state", 0],
+      ["kv_save", 0, "count"],
+      ["tone", 1100, 55],
+      ["include", "render"],
+      ["label", "action_done"],
+      ["end"]
+    ]
+  }
+}

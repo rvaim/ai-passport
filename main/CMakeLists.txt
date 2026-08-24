@@ -1,0 +1,20 @@
+idf_component_register(
+    SRCS "main.c"
+         "ui_pixel.c"
+         "ui_theme.c"
+         "ui_font_zh_14.c"
+         "ui_font_zh_18.c"
+         "plugin_manager.c"
+         "plugin_manager_model.c"
+         "app_registry.c"
+         "system_plugins.c"
+         "device_code.c"
+         "device_identity.c"
+         "device_settings.c"
+         "plugin_host.c"
+         "plugin_ble.c"
+         "nearby_protocol.c"
+         "nearby_service.c"
+    INCLUDE_DIRS "."
+    REQUIRES bsp plugin_runtime bt mbedtls nvs_flash spi_flash esp_hw_support heap
+)
