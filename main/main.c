@@ -4,6 +4,7 @@
 #include "bsp_i2c.h"
 #include "passport_app_registry.h"
 #include "passport_identity.h"
+#include "passport_input_policy.h"
 #include "passport_link.h"
 #include "passport_package.h"
 #include "passport_runtime.h"
@@ -21,13 +22,15 @@
 
 static const char *TAG = "passport_main";
 #define EVENT_QUEUE_DEPTH 16
-#define SETTINGS_ROW_COUNT 4
+#define SETTINGS_VALUE_ROW_COUNT 4
+#define SETTINGS_LIST_ROW_COUNT (SETTINGS_VALUE_ROW_COUNT + 1)
 
 typedef enum {
     VIEW_LAUNCHER = 0,
     VIEW_PLUGINS,
     VIEW_PLUGIN_DETAIL,
     VIEW_SETTINGS,
+    VIEW_DEVICE_INFO,
     VIEW_THEMES,
     VIEW_LUA_APP,
 } view_t;
@@ -60,14 +63,14 @@ static passport_theme_info_t s_themes[PASSPORT_MAX_INSTALLED_THEMES];
 static size_t s_theme_count;
 static passport_settings_wake_guard_t s_wake_guard;
 
-static const passport_setting_id_t SETTINGS_ROWS[SETTINGS_ROW_COUNT] = {
+static const passport_setting_id_t SETTINGS_ROWS[SETTINGS_VALUE_ROW_COUNT] = {
     PASSPORT_SETTING_BRIGHTNESS,
     PASSPORT_SETTING_SCREEN_TIMEOUT,
     PASSPORT_SETTING_VOLUME,
     PASSPORT_SETTING_KEY_SOUND,
 };
 
-static const char *const SETTINGS_NAMES[SETTINGS_ROW_COUNT] = {
+static const char *const SETTINGS_NAMES[SETTINGS_VALUE_ROW_COUNT] = {
     "屏幕亮度",
     "息屏时间",
     "系统音量",
@@ -112,8 +115,10 @@ static void show_plugins(void)
     destroy_native_view();
     passport_app_registry_scan();
     s_page = passport_ui_page_create("插件管理", true, true);
-    s_list = passport_ui_list_create(s_page, 1 + PASSPORT_MAX_INSTALLED_APPS);
-    passport_ui_list_add(s_list, passport_link_connected() ? "蓝牙已连接，可安装" : "等待蓝牙安装");
+    char info[96];
+    snprintf(info, sizeof(info), "设备码 %s\n用于网页连接与安装", passport_identity_code());
+    passport_ui_label_create(s_page, info);
+    s_list = passport_ui_list_create(s_page, PASSPORT_MAX_INSTALLED_APPS);
     for (size_t i = 0; i < passport_app_registry_count(); ++i) {
         const passport_app_info_t *app = passport_app_registry_get(i);
         char row[80];
@@ -121,7 +126,9 @@ static void show_plugins(void)
         snprintf(row, sizeof(row), "%s  %s", app->manifest.name, app->manifest.version);
         passport_ui_list_add(s_list, row);
     }
-    passport_ui_page_set_actions(s_page, "详情", "主页");
+    passport_ui_page_set_actions(s_page,
+                                 passport_app_registry_count() > 0 ? "详情" : "",
+                                 "主页");
     passport_ui_page_show(s_page);
     s_view = VIEW_PLUGINS;
 }
@@ -168,7 +175,7 @@ static void format_setting_value(passport_setting_id_t id,
 static void refresh_settings(void)
 {
     if (!s_page || !s_list) return;
-    for (size_t i = 0; i < SETTINGS_ROW_COUNT; ++i) {
+    for (size_t i = 0; i < SETTINGS_VALUE_ROW_COUNT; ++i) {
         uint16_t value = 0U;
         char text[24];
         if (!passport_settings_get(SETTINGS_ROWS[i], &value)) continue;
@@ -176,29 +183,38 @@ static void refresh_settings(void)
         passport_ui_list_set_value(s_list, i, text);
     }
     const size_t selected = passport_ui_list_selected(s_list);
-    passport_ui_page_set_actions(
-        s_page,
-        selected < SETTINGS_ROW_COUNT &&
-                SETTINGS_ROWS[selected] == PASSPORT_SETTING_KEY_SOUND
-            ? "切换" : "调整",
-        "主页");
+    const char *action = "调整";
+    if (selected == SETTINGS_VALUE_ROW_COUNT) action = "查看";
+    else if (selected < SETTINGS_VALUE_ROW_COUNT &&
+             SETTINGS_ROWS[selected] == PASSPORT_SETTING_KEY_SOUND) action = "切换";
+    passport_ui_page_set_actions(s_page, action, "主页");
 }
 
 static void show_settings(void)
 {
     destroy_native_view();
     s_page = passport_ui_page_create("设置", true, true);
-    s_list = passport_ui_list_create(s_page, SETTINGS_ROW_COUNT);
-    for (size_t i = 0; i < SETTINGS_ROW_COUNT; ++i) {
+    s_list = passport_ui_list_create(s_page, SETTINGS_LIST_ROW_COUNT);
+    for (size_t i = 0; i < SETTINGS_VALUE_ROW_COUNT; ++i) {
         passport_ui_list_add_value(s_list, SETTINGS_NAMES[i], "");
     }
-    char info[128];
-    snprintf(info, sizeof(info), "设备码 %s\n主题 %s",
-             passport_identity_code(), passport_theme_current_id());
-    passport_ui_label_create(s_page, info);
+    passport_ui_list_add(s_list, "设备信息");
     refresh_settings();
     passport_ui_page_show(s_page);
     s_view = VIEW_SETTINGS;
+}
+
+static void show_device_info(void)
+{
+    destroy_native_view();
+    s_page = passport_ui_page_create("设备信息", true, true);
+    char info[112];
+    snprintf(info, sizeof(info), "本机设备码\n%s\n\n用于连接和安装插件",
+             passport_identity_code());
+    passport_ui_label_create(s_page, info);
+    passport_ui_page_set_actions(s_page, "返回", "主页");
+    passport_ui_page_show(s_page);
+    s_view = VIEW_DEVICE_INFO;
 }
 
 static void show_themes(void)
@@ -234,10 +250,10 @@ static void launch_selected_plugin(size_t registry_index)
 
 static void handle_launcher_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
-    if (ev != BSP_BTN_CLICK || !s_list) return;
-    if (btn == BSP_BTN_UP) passport_ui_list_move(s_list, -1);
-    else if (btn == BSP_BTN_DOWN) passport_ui_list_move(s_list, 1);
-    else if (btn == BSP_BTN_OK) {
+    if (!s_list) return;
+    const int delta = passport_input_navigation_delta(btn, ev);
+    if (delta != 0) passport_ui_list_move(s_list, delta);
+    else if (btn == BSP_BTN_OK && ev == BSP_BTN_CLICK) {
         size_t selected = passport_ui_list_selected(s_list);
         if (selected == 0) show_plugins();
         else if (selected == 1) show_settings();
@@ -248,20 +264,22 @@ static void handle_launcher_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 
 static void handle_plugins_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
-    if (ev != BSP_BTN_CLICK || !s_list) return;
-    if (btn == BSP_BTN_UP) passport_ui_list_move(s_list, -1);
-    else if (btn == BSP_BTN_DOWN) passport_ui_list_move(s_list, 1);
-    else if (btn == BSP_BTN_OK) {
+    if (!s_list) return;
+    const int delta = passport_input_navigation_delta(btn, ev);
+    if (delta != 0) passport_ui_list_move(s_list, delta);
+    else if (btn == BSP_BTN_OK && ev == BSP_BTN_CLICK &&
+             passport_app_registry_count() > 0) {
         size_t selected = passport_ui_list_selected(s_list);
-        if (selected > 0) show_plugin_detail(selected - 1);
+        show_plugin_detail(selected);
     }
 }
 
 static void handle_plugin_detail_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
-    if (ev != BSP_BTN_CLICK || !s_list) return;
-    if (btn == BSP_BTN_UP || btn == BSP_BTN_DOWN) {
-        passport_ui_list_move(s_list, btn == BSP_BTN_UP ? -1 : 1);
+    if (!s_list) return;
+    const int delta = passport_input_navigation_delta(btn, ev);
+    if (delta != 0) {
+        passport_ui_list_move(s_list, delta);
         if (s_plugin_uninstall_armed) {
             s_plugin_uninstall_armed = false;
             passport_ui_label_set_text(s_plugin_detail_notice, "");
@@ -269,7 +287,7 @@ static void handle_plugin_detail_key(bsp_btn_t btn, bsp_btn_ev_t ev)
         }
         return;
     }
-    if (btn != BSP_BTN_OK) return;
+    if (btn != BSP_BTN_OK || ev != BSP_BTN_CLICK) return;
     if (passport_ui_list_selected(s_list) == 0) {
         show_plugins();
         return;
@@ -291,10 +309,10 @@ static void handle_plugin_detail_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 
 static void handle_themes_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
-    if (ev != BSP_BTN_CLICK || !s_list || s_theme_count == 0) return;
-    if (btn == BSP_BTN_UP) passport_ui_list_move(s_list, -1);
-    else if (btn == BSP_BTN_DOWN) passport_ui_list_move(s_list, 1);
-    else if (btn == BSP_BTN_OK) {
+    if (!s_list || s_theme_count == 0) return;
+    const int delta = passport_input_navigation_delta(btn, ev);
+    if (delta != 0) passport_ui_list_move(s_list, delta);
+    else if (btn == BSP_BTN_OK && ev == BSP_BTN_CLICK) {
         size_t selected = passport_ui_list_selected(s_list);
         if (selected < s_theme_count && passport_theme_apply(s_themes[selected].id) == ESP_OK) show_themes();
     }
@@ -302,15 +320,20 @@ static void handle_themes_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 
 static void handle_settings_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
-    if (ev != BSP_BTN_CLICK || !s_list) return;
-    if (btn == BSP_BTN_UP || btn == BSP_BTN_DOWN) {
-        passport_ui_list_move(s_list, btn == BSP_BTN_UP ? -1 : 1);
+    if (!s_list) return;
+    const int delta = passport_input_navigation_delta(btn, ev);
+    if (delta != 0) {
+        passport_ui_list_move(s_list, delta);
         refresh_settings();
         return;
     }
-    if (btn != BSP_BTN_OK) return;
+    if (btn != BSP_BTN_OK || ev != BSP_BTN_CLICK) return;
     const size_t selected = passport_ui_list_selected(s_list);
-    if (selected >= SETTINGS_ROW_COUNT) return;
+    if (selected == SETTINGS_VALUE_ROW_COUNT) {
+        show_device_info();
+        return;
+    }
+    if (selected >= SETTINGS_VALUE_ROW_COUNT) return;
     esp_err_t err = passport_settings_cycle(SETTINGS_ROWS[selected]);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "修改设置失败: %s", esp_err_to_name(err));
@@ -320,6 +343,11 @@ static void handle_settings_key(bsp_btn_t btn, bsp_btn_ev_t ev)
         passport_settings_sound_preview();
     }
     refresh_settings();
+}
+
+static void handle_device_info_key(bsp_btn_t btn, bsp_btn_ev_t ev)
+{
+    if (btn == BSP_BTN_OK && ev == BSP_BTN_CLICK) show_settings();
 }
 
 static bool consume_screen_wake(bsp_btn_t btn, bsp_btn_ev_t ev)
@@ -333,7 +361,8 @@ static bool consume_screen_wake(bsp_btn_t btn, bsp_btn_ev_t ev)
 
 static bool is_key_sound_event(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
-    return ev == BSP_BTN_CLICK || (btn == BSP_BTN_OK && ev == BSP_BTN_LONG);
+    return ev == BSP_BTN_CLICK || ev == BSP_BTN_DOUBLE ||
+           (btn == BSP_BTN_OK && ev == BSP_BTN_LONG);
 }
 
 static void handle_key_event(bsp_btn_t btn, bsp_btn_ev_t ev)
@@ -348,6 +377,7 @@ static void handle_key_event(bsp_btn_t btn, bsp_btn_ev_t ev)
     case VIEW_PLUGINS: handle_plugins_key(btn, ev); break;
     case VIEW_PLUGIN_DETAIL: handle_plugin_detail_key(btn, ev); break;
     case VIEW_SETTINGS: handle_settings_key(btn, ev); break;
+    case VIEW_DEVICE_INFO: handle_device_info_key(btn, ev); break;
     case VIEW_THEMES: handle_themes_key(btn, ev); break;
     case VIEW_LUA_APP: passport_runtime_handle_key(btn, ev); break;
     default: break;

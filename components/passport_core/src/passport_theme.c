@@ -43,22 +43,40 @@ static bool parse_color(cJSON *item, uint32_t *out)
 static esp_err_t load_theme_file(const char *id, passport_theme_tokens_t *out, char *name, size_t name_cap)
 {
     if (!passport_package_id_is_valid(id) || !out) return ESP_ERR_INVALID_ARG;
-    char path[220], json[4096];
+    char path[220];
     int path_len = snprintf(path, sizeof(path), "%s/%s/manifest.json", PASSPORT_THEMES_DIR, id);
     if (path_len < 0 || (size_t)path_len >= sizeof(path)) return ESP_ERR_INVALID_SIZE;
-    esp_err_t err = passport_storage_read_text(path, json, sizeof(json), NULL);
-    if (err != ESP_OK) return err;
+
+    /* Theme loading can run in the 6 KiB system task. Allocate the bounded
+     * JSON document temporarily instead of consuming most of that task stack. */
+    char *json = malloc(PASSPORT_PACKAGE_MANIFEST_MAX + 1U);
+    if (!json) return ESP_ERR_NO_MEM;
+    size_t json_len = 0;
+    esp_err_t err = passport_storage_read_text(
+        path, json, PASSPORT_PACKAGE_MANIFEST_MAX + 1U, &json_len);
+    if (err != ESP_OK) {
+        free(json);
+        return err;
+    }
 
     passport_manifest_t manifest;
-    err = passport_package_parse_manifest_json(json, strlen(json), PASSPORT_PACKAGE_THEME, &manifest);
-    if (err != ESP_OK || strcmp(manifest.id, id) != 0) return ESP_ERR_INVALID_ARG;
+    err = passport_package_parse_manifest_json(
+        json, json_len, PASSPORT_PACKAGE_THEME, &manifest);
+    if (err != ESP_OK || strcmp(manifest.id, id) != 0) {
+        free(json);
+        return ESP_ERR_INVALID_ARG;
+    }
 
-    cJSON *doc = cJSON_Parse(json);
-    if (!doc) return ESP_ERR_INVALID_ARG;
+    cJSON *doc = cJSON_ParseWithLength(json, json_len);
+    if (!doc) {
+        free(json);
+        return ESP_ERR_INVALID_ARG;
+    }
     cJSON *tokens = cJSON_GetObjectItemCaseSensitive(doc, "tokens");
     bool ok = cJSON_IsObject(tokens);
     if (!ok) {
         cJSON_Delete(doc);
+        free(json);
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -87,6 +105,7 @@ static esp_err_t load_theme_file(const char *id, passport_theme_tokens_t *out, c
         else memcpy(name, manifest.name, manifest_name_len + 1);
     }
     cJSON_Delete(doc);
+    free(json);
     return ok ? ESP_OK : ESP_ERR_INVALID_ARG;
 }
 

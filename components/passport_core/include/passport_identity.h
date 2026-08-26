@@ -14,7 +14,7 @@ esp_err_t passport_identity_init(void);
 /** 48-bit factory-derived ID stored in the low bits of the return value. */
 uint64_t passport_identity_id(void);
 
-/** Human-readable public code, for example ABCDE-FGHIJ-K. */
+/** Human-readable public code, for example 22222-22222-2. */
 const char *passport_identity_code(void);
 
 /** Convert a device ID to the canonical public code. Useful for peer discovery. */

@@ -22,6 +22,10 @@ with tempfile.TemporaryDirectory() as td:
     }, ensure_ascii=False), encoding="utf-8")
     (source / "main.lua").write_text('print("ok")\n', encoding="utf-8")
     (source / "README.md").write_text("not shipped", encoding="utf-8")
+    (source / ".DS_Store").write_bytes(b"finder metadata")
+    hidden = source / ".cache"
+    hidden.mkdir()
+    (hidden / "index").write_bytes(b"tool metadata")
     out = root / "test.pap"
     pack_pap.build(source, out)
     data = out.read_bytes()

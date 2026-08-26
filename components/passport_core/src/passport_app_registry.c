@@ -4,6 +4,7 @@
 #include "esp_log.h"
 #include <dirent.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static const char *TAG = "passport_registry";
@@ -13,12 +14,22 @@ static size_t s_count;
 static esp_err_t parse_installed_manifest(const char *root, passport_manifest_t *out)
 {
     char path[220];
-    char json[4096];
     int path_len = snprintf(path, sizeof(path), "%s/manifest.json", root);
     if (path_len < 0 || (size_t)path_len >= sizeof(path)) return ESP_ERR_INVALID_SIZE;
-    esp_err_t err = passport_storage_read_text(path, json, sizeof(json), NULL);
-    if (err != ESP_OK) return err;
-    return passport_package_parse_manifest_json(json, strlen(json), PASSPORT_PACKAGE_APP, out);
+
+    /* Registry scans run in the UI system task. Keep the bounded manifest on
+     * the heap so cJSON and FATFS retain enough call-stack headroom. */
+    char *json = malloc(PASSPORT_PACKAGE_MANIFEST_MAX + 1U);
+    if (!json) return ESP_ERR_NO_MEM;
+    size_t json_len = 0;
+    esp_err_t err = passport_storage_read_text(
+        path, json, PASSPORT_PACKAGE_MANIFEST_MAX + 1U, &json_len);
+    if (err == ESP_OK) {
+        err = passport_package_parse_manifest_json(
+            json, json_len, PASSPORT_PACKAGE_APP, out);
+    }
+    free(json);
+    return err;
 }
 
 static bool build_app_root(char *out, size_t capacity, const char *id)

@@ -34,6 +34,7 @@ static const ble_uuid128_t PKG_STATUS_UUID = BLE_UUID128_INIT(0x31,0x50,0x41,0x5
 #define LINK_CONN_NONE 0xFFFF
 #define PKG_CHUNK_MAX 244
 #define PKG_QUEUE_DEPTH 8
+#define PKG_WORKER_STACK_BYTES 6144
 
 typedef enum {
     WORK_PKG_BEGIN = 1,
@@ -117,6 +118,8 @@ static void package_finish(void)
     else notify_text(s_pkg_status_handle, s_pkg_status_subscribed, "安装失败");
     if (s_install_cb) s_install_cb(result, result == ESP_OK ? &installed : NULL, s_install_user);
     package_reset();
+    ESP_LOGI(TAG, "pap_install 最小剩余栈: %u B",
+             (unsigned)uxTaskGetStackHighWaterMark(NULL));
 }
 
 static void package_worker(void *arg)
@@ -243,11 +246,22 @@ static int advertise(void)
     ble_svc_gap_device_name_set(name);
     struct ble_hs_adv_fields fields = {0};
     fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
-    fields.name = (const uint8_t *)name;
-    fields.name_len = strlen(name);
-    fields.name_is_complete = 1;
+    fields.uuids128 = &SVC_UUID;
+    fields.num_uuids128 = 1;
+    fields.uuids128_is_complete = 1;
     int rc = ble_gap_adv_set_fields(&fields);
     if (rc != 0) return rc;
+
+    /* The legacy 31-byte advertisement cannot hold flags, the 128-bit service
+     * UUID, and the complete device name together. Keep discovery data in the
+     * advertisement for Web Bluetooth filters and move the name to scan response. */
+    struct ble_hs_adv_fields response = {0};
+    response.name = (const uint8_t *)name;
+    response.name_len = strlen(name);
+    response.name_is_complete = 1;
+    rc = ble_gap_adv_rsp_set_fields(&response);
+    if (rc != 0) return rc;
+
     struct ble_gap_adv_params params = {0};
     params.conn_mode = BLE_GAP_CONN_MODE_UND;
     params.disc_mode = BLE_GAP_DISC_MODE_GEN;
@@ -326,7 +340,11 @@ esp_err_t passport_link_init(void)
         nimble_port_deinit();
         return ESP_ERR_NO_MEM;
     }
-    if (xTaskCreate(package_worker, "pap_install", 4096, NULL, 4, NULL) != pdPASS) {
+    /* FATFS transaction handling and cJSON parsing exceeded the original 4 KiB
+     * stack in measured hardware installs. Six KiB leaves bounded headroom;
+     * package_finish logs the observed minimum reserve after each transaction. */
+    if (xTaskCreate(package_worker, "pap_install", PKG_WORKER_STACK_BYTES,
+                    NULL, 4, NULL) != pdPASS) {
         vQueueDelete(s_queue);
         s_queue = NULL;
         nimble_port_deinit();

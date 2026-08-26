@@ -53,7 +53,9 @@ def build(source: Path, output: Path) -> None:
     files: list[tuple[str, Path]] = []
     for path in sorted(source.rglob("*")):
         rel_parts = path.relative_to(source).parts
-        if (not path.is_file() or path == manifest_path or "dist" in rel_parts or
+        if (not path.is_file() or path == manifest_path or
+                any(part.startswith(".") for part in rel_parts) or
+                "dist" in rel_parts or
                 path.name in ("README.md", "README.zh_CN.md")):
             continue
         rel = path.relative_to(source).as_posix()

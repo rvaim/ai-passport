@@ -100,6 +100,10 @@ CONFIG_LV_MEM_SIZE_KILOBYTES=24
 
 # --- 系统 ---
 CONFIG_FREERTOS_HZ=1000
+# 100 ms 双击窗口兼顾快速连按与单击响应；原生上下键双击会明确移动两格，不再丢失。
+CONFIG_BUTTON_SHORT_PRESS_TIME_MS=100
+# 系统级长按确定返回主页保持有意触发，同时由默认 1500 ms 缩短到 800 ms。
+CONFIG_BUTTON_LONG_PRESS_TIME_MS=800
 # 固件不在运行时调整日志等级，省去 tag-level 缓存与查找逻辑。
 # CONFIG_LOG_DYNAMIC_LEVEL_CONTROL is not set
 

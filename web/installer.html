@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#d9edf5">
+  <title>Passport 插件安装</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: #17202a;
+      background: #d9edf5;
+      font-synthesis: none;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      padding: clamp(24px, 6vw, 64px) 16px 32px;
+      background: #d9edf5;
+    }
+
+    button,
+    input { font: inherit; }
+
+    button { -webkit-tap-highlight-color: transparent; }
+
+    .page {
+      width: min(100%, 680px);
+      margin: 0 auto;
+    }
+
+    .masthead {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin: 0 0 24px;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 46px;
+      height: 46px;
+      flex: 0 0 auto;
+      place-items: center;
+      color: #fff;
+      background: #0872c9;
+      border-radius: 14px;
+      box-shadow: 0 7px 16px rgba(23, 32, 42, .18);
+    }
+
+    .brand-mark svg { width: 26px; height: 26px; }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(26px, 7vw, 36px);
+      line-height: 1.08;
+      letter-spacing: -.03em;
+    }
+
+    .masthead p {
+      margin: 5px 0 0;
+      color: #44545f;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .installer {
+      overflow: hidden;
+      background: #f8faf8;
+      border: 2px solid #17202a;
+      border-radius: 16px;
+    }
+
+    .task {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      padding: 22px;
+      border-bottom: 1px solid #b8c7cd;
+    }
+
+    .task:last-of-type { border-bottom: 0; }
+
+    .task-copy {
+      display: flex;
+      min-width: 0;
+      align-items: flex-start;
+      gap: 13px;
+    }
+
+    .task-icon {
+      display: grid;
+      width: 36px;
+      height: 36px;
+      flex: 0 0 auto;
+      place-items: center;
+      color: #0872c9;
+      background: #dceef9;
+      border-radius: 12px;
+    }
+
+    .task-icon svg { width: 21px; height: 21px; }
+
+    h2 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.35;
+      letter-spacing: -.01em;
+    }
+
+    .task p {
+      margin: 5px 0 0;
+      color: #44545f;
+      font-size: 14px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .file-name,
+    .device-code {
+      color: #17202a;
+      font-weight: 700;
+    }
+
+    .device-code {
+      font-variant-numeric: tabular-nums;
+      letter-spacing: .035em;
+    }
+
+    .device-task { grid-template-columns: 1fr; }
+
+    .task-body {
+      min-width: 0;
+      width: 100%;
+    }
+
+    .pairing-actions {
+      display: flex;
+      align-items: stretch;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .pairing-input {
+      min-width: 0;
+      min-height: 44px;
+      flex: 1 1 220px;
+      border: 1px solid #6f8089;
+      border-radius: 12px;
+      padding: 0 14px;
+      color: #17202a;
+      background: #fff;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: .055em;
+      text-transform: uppercase;
+    }
+
+    .pairing-input::placeholder {
+      color: #718089;
+      font-weight: 600;
+      opacity: 1;
+    }
+
+    .pairing-input[aria-invalid="true"] { border-color: #b82b25; }
+
+    .pairing-input:disabled {
+      color: #66767e;
+      background: #e8eef0;
+      cursor: not-allowed;
+    }
+
+    .field-note { margin-top: 8px !important; }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .button,
+    .file-button {
+      display: inline-flex;
+      min-height: 44px;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: 12px;
+      padding: 0 17px;
+      color: #fff;
+      background: #0872c9;
+      font-weight: 700;
+      line-height: 1.2;
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background-color 140ms ease, transform 140ms ease;
+    }
+
+    .button:hover,
+    .file-button:hover { background: #075da5; }
+
+    .button:active,
+    .file-button:active { transform: translateY(1px); }
+
+    .button:focus-visible,
+    .file-button:focus-visible,
+    input:focus-visible {
+      outline: 3px solid #1689e8;
+      outline-offset: 3px;
+    }
+
+    .button:disabled,
+    .file-button:disabled {
+      color: #eef2f3;
+      background: #87969d;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .button.secondary {
+      color: #17202a;
+      background: #e6eef1;
+      box-shadow: inset 0 0 0 1px #6f8089;
+    }
+
+    .button.secondary:hover { background: #d7e4e9; }
+
+    .file-task.is-dragging { background: #eaf5fb; }
+
+    .install-area {
+      padding: 22px;
+      background: #edf4f6;
+      border-top: 1px solid #b8c7cd;
+    }
+
+    .progress-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 9px;
+      color: #44545f;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    progress {
+      display: block;
+      width: 100%;
+      height: 10px;
+      overflow: hidden;
+      margin: 0 0 18px;
+      appearance: none;
+      accent-color: #0872c9;
+      border: 0;
+      border-radius: 5px;
+      background: #c9d7dc;
+    }
+
+    progress::-webkit-progress-bar { background: #c9d7dc; }
+    progress::-webkit-progress-value { background: #0872c9; }
+    progress::-moz-progress-bar { background: #0872c9; }
+
+    .install-button { width: 100%; min-height: 50px; }
+
+    .status {
+      display: flex;
+      gap: 11px;
+      align-items: flex-start;
+      padding: 17px 22px;
+      color: #283740;
+      background: #e8f0f3;
+      border-top: 1px solid #b8c7cd;
+    }
+
+    .status-dot {
+      width: 11px;
+      height: 11px;
+      flex: 0 0 auto;
+      margin-top: 4px;
+      border-radius: 50%;
+      background: #6e7e86;
+    }
+
+    .status[data-kind="working"] .status-dot {
+      background: #0872c9;
+    }
+
+    .status[data-kind="success"] .status-dot {
+      background: #487f18;
+    }
+
+    .status[data-kind="error"] .status-dot {
+      background: #b82b25;
+    }
+
+    .status strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 14px;
+    }
+
+    .status p {
+      margin: 0;
+      color: #44545f;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .requirements {
+      margin: 17px 4px 0;
+      color: #44545f;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    noscript {
+      display: block;
+      margin: 14px 0;
+      padding: 12px;
+      color: #811c18;
+      background: #fce9e7;
+      border-radius: 12px;
+    }
+
+    @media (max-width: 560px) {
+      body { padding-top: 24px; }
+      .masthead { align-items: flex-start; }
+      .task { grid-template-columns: 1fr; padding: 19px; }
+      .button,
+      .file-button { width: 100%; }
+      .pairing-actions { flex-direction: column; }
+      .pairing-input { width: 100%; flex-basis: auto; }
+      .install-area,
+      .status { padding-right: 19px; padding-left: 19px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .button,
+      .file-button { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <!--
+  THESIS: A quiet, direct local installer that makes the file, target device, and transfer state unmistakable.
+  OWN-WORLD: Passport's light blue field, dark ink, compact blue controls, and crisp bordered utility surface.
+  STORY: Choose a valid package, enter the device pairing code, then watch one bounded transfer complete.
+  FIRST VIEWPORT: Identity, package selection, pairing-code targeting, install readiness, and live status all remain visible.
+  FORM: Linear installer console; concept 1/1; seed key passport-install-linear-v1.
+  FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+  -->
+  <main class="page">
+    <header class="masthead">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m8 7 8 10-4 4V3l4 4L8 17"/>
+        </svg>
+      </span>
+      <div>
+        <h1>Passport 插件安装</h1>
+        <p>插件只在浏览器与设备之间传输，不会上传到互联网。</p>
+      </div>
+    </header>
+
+    <noscript>需要启用 JavaScript 才能连接设备并安装插件。</noscript>
+
+    <section class="installer" aria-label="插件安装流程">
+      <div class="task file-task" id="file-task">
+        <div class="task-copy">
+          <span class="task-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+              <path d="M14 2v6h6M8 14h8M8 18h5"/>
+            </svg>
+          </span>
+          <div>
+            <h2>选择插件包</h2>
+            <p id="file-detail">请选择不超过 4 MB 的 <span class="file-name">.pap</span> 文件，也可以拖到这里。</p>
+          </div>
+        </div>
+        <input id="package-file" type="file" accept=".pap,application/octet-stream" hidden>
+        <button class="file-button" id="file-button" type="button">选择文件</button>
+      </div>
+
+      <div class="task device-task">
+        <div class="task-copy">
+          <span class="task-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m8 7 8 10-4 4V3l4 4L8 17"/>
+            </svg>
+          </span>
+          <div class="task-body">
+            <h2>输入设备配对码</h2>
+            <p>在 Passport 的“设置 → 设备信息”或“插件管理”页查看。</p>
+            <div class="pairing-actions">
+              <label class="visually-hidden" for="pairing-code">设备配对码</label>
+              <input class="pairing-input" id="pairing-code" type="text" inputmode="text"
+                autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="13"
+                placeholder="XXXXX-XXXXX-X" aria-describedby="device-detail" aria-invalid="false">
+              <button class="button secondary" id="connect-button" type="button">连接设备</button>
+            </div>
+            <p class="field-note" id="device-detail">浏览器先显示附近的 Passport，连接后会用配对码核对目标设备。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="install-area">
+        <div class="progress-row">
+          <span id="progress-label">等待文件和设备</span>
+          <span id="progress-value">0%</span>
+        </div>
+        <progress id="progress" max="1" value="0">0%</progress>
+        <button class="button install-button" id="install-button" type="button" disabled>安装到设备</button>
+      </div>
+
+      <div class="status" id="status" data-kind="idle" role="status" aria-live="polite" aria-atomic="true">
+        <span class="status-dot" aria-hidden="true"></span>
+        <div>
+          <strong id="status-title">尚未准备好</strong>
+          <p id="status-detail">选择插件包并连接 Passport 后即可安装。</p>
+        </div>
+      </div>
+    </section>
+
+    <p class="requirements">请使用桌面版 Chrome 或 Edge，并通过 HTTPS 或 localhost 打开本页。浏览器会列出广播 Passport Service 的设备；网页连接后会核对配对码，选错设备不会进入安装。首次连接仍需确认一次设备授权。Safari 和 iPhone/iPad 暂不支持 Web Bluetooth。</p>
+  </main>
+
+  <script type="module" src="./installer.mjs"></script>
+</body>
+</html>

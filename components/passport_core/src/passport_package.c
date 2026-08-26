@@ -16,7 +16,6 @@ static const char *TAG = "passport_package";
 static const uint8_t PAP_MAGIC[4] = {'P', 'A', 'P', '1'};
 #define PAP_HEADER_SIZE 16U
 #define PAP_ENTRY_HEADER_SIZE 12U
-#define PAP_MANIFEST_MAX 4096U
 #define PAP_PATH_MAX 120U
 #define PAP_COPY_CHUNK 512U
 
@@ -144,7 +143,9 @@ static esp_err_t read_header(FILE *f, passport_package_kind_t *kind, uint32_t *m
     if (k != PASSPORT_PACKAGE_APP && k != PASSPORT_PACKAGE_THEME) return ESP_ERR_INVALID_ARG;
     uint32_t mlen = read_le32(h + 8);
     uint32_t count = read_le32(h + 12);
-    if (mlen == 0 || mlen > PAP_MANIFEST_MAX || count > 64) return ESP_ERR_INVALID_SIZE;
+    if (mlen == 0 || mlen > PASSPORT_PACKAGE_MANIFEST_MAX || count > 64) {
+        return ESP_ERR_INVALID_SIZE;
+    }
     *kind = (passport_package_kind_t)k;
     *manifest_len = mlen;
     *entry_count = count;

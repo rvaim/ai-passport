@@ -38,6 +38,17 @@ run_static_checks() {
         components/passport_core/src/passport_settings_model.c \
         -o "${test_dir}/test_passport_settings_model"
     "${test_dir}/test_passport_settings_model"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
+        -Itests/host_stubs -Icomponents/bsp/include -Imain \
+        tests/test_passport_input_policy.c \
+        -o "${test_dir}/test_passport_input_policy"
+    "${test_dir}/test_passport_input_policy"
+    "${CC:-cc}" -std=c99 -O2 -DMAKE_LUA \
+        -Imanaged_components/espressif__lua/lua \
+        managed_components/espressif__lua/lua/onelua.c \
+        -lm -o "${test_dir}/lua"
+    "${test_dir}/lua" tests/test_counter_plugin.lua examples/counter/main.lua
+    node tests/test_web_installer_protocol.mjs
     python3 tests/test_generate_ui_font.py
     python3 tests/test_pack_pap.py
     rm -rf "${test_dir}"
