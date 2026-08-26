@@ -1,0 +1,17 @@
+{
+  "type": "theme",
+  "id": "theme.night",
+  "name": "夜间主题",
+  "version": "1.0.0",
+  "api": 1,
+  "tokens": {
+    "background": "#111318",
+    "surface": "#1C2028",
+    "text": "#F4F6F8",
+    "muted_text": "#A6AFBA",
+    "accent": "#63A4FF",
+    "divider": "#343A46",
+    "spacing": 6,
+    "radius": 4
+  }
+}

@@ -3,17 +3,11 @@
 #pragma once
 
 #include "esp_err.h"
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
 // 初始化 codec 与 I2S。内部会调 bsp_i2c_init()(幂等),无需外部先调。
 esp_err_t bsp_audio_init(void);
-
-// 需要连续改变格式并收发多段音频时,用会话锁保护整段操作。内部音频 API 也会
-// 自动加同一个可重入锁,因此持有会话锁后可以正常调用下面的函数。
-bool bsp_audio_session_begin(uint32_t timeout_ms);
-void bsp_audio_session_end(void);
 
 // 设置采样格式。同格式重复调用是廉价的(直接复用已打开的 codec)。
 //

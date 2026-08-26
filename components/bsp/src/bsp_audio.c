@@ -8,10 +8,6 @@
 #include "es8311_codec.h"
 #include "driver/i2s_std.h"
 #include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
-
-#include <limits.h>
 
 static const char *TAG = "bsp_audio";
 
@@ -21,17 +17,6 @@ static i2s_chan_handle_t      s_tx, s_rx;
 static uint32_t s_hz;
 static uint8_t  s_bits, s_ch;
 static bool     s_opened;
-static SemaphoreHandle_t s_audio_mutex;
-
-bool bsp_audio_session_begin(uint32_t timeout_ms) {
-    if (!s_audio_mutex) return false;
-    TickType_t timeout = timeout_ms == UINT32_MAX ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
-    return xSemaphoreTakeRecursive(s_audio_mutex, timeout) == pdTRUE;
-}
-
-void bsp_audio_session_end(void) {
-    if (s_audio_mutex) xSemaphoreGiveRecursive(s_audio_mutex);
-}
 
 static esp_err_t i2s_full_duplex_init(void) {
     i2s_chan_config_t chan = {
@@ -72,12 +57,10 @@ static esp_err_t i2s_full_duplex_init(void) {
             .invert_flags = { .mclk_inv = false, .bclk_inv = false, .ws_inv = false },
         },
     };
-    e = i2s_channel_init_std_mode(s_tx, &std);
-    if (e != ESP_OK) {
+    if ((e = i2s_channel_init_std_mode(s_tx, &std)) != ESP_OK) {
         ESP_LOGE(TAG, "i2s tx 初始化失败: %s", esp_err_to_name(e)); return e;
     }
-    e = i2s_channel_init_std_mode(s_rx, &std);
-    if (e != ESP_OK) {
+    if ((e = i2s_channel_init_std_mode(s_rx, &std)) != ESP_OK) {
         ESP_LOGE(TAG, "i2s rx 初始化失败: %s", esp_err_to_name(e)); return e;
     }
     // esp_codec_dev_open 内部重配前会先 i2s_channel_disable,而 disable 要求通道处于
@@ -89,10 +72,6 @@ static esp_err_t i2s_full_duplex_init(void) {
 }
 
 esp_err_t bsp_audio_init(void) {
-    if (!s_audio_mutex) {
-        s_audio_mutex = xSemaphoreCreateRecursiveMutex();
-        if (!s_audio_mutex) return ESP_ERR_NO_MEM;
-    }
     if (s_dev) return ESP_OK;
 
     esp_err_t e = bsp_i2c_init();
@@ -110,8 +89,7 @@ esp_err_t bsp_audio_init(void) {
         return ESP_FAIL;
     }
 
-    e = i2s_full_duplex_init();
-    if (e != ESP_OK) return e;
+    if ((e = i2s_full_duplex_init()) != ESP_OK) return e;
 
     const audio_codec_data_if_t *data = audio_codec_new_i2s_data(&(audio_codec_i2s_cfg_t){
         .port = BSP_I2S_PORT, .tx_handle = s_tx, .rx_handle = s_rx,
@@ -146,11 +124,7 @@ esp_err_t bsp_audio_init(void) {
 
 esp_err_t bsp_audio_set_format(uint32_t hz, uint8_t bits, uint8_t ch) {
     if (!s_dev) return ESP_ERR_INVALID_STATE;
-    if (!bsp_audio_session_begin(UINT32_MAX)) return ESP_ERR_TIMEOUT;
-    if (s_opened && s_hz == hz && s_bits == bits && s_ch == ch) {
-        bsp_audio_session_end();
-        return ESP_OK;   // 同格式复用
-    }
+    if (s_opened && s_hz == hz && s_bits == bits && s_ch == ch) return ESP_OK;   // 同格式复用
 
     if (s_opened) {
         esp_codec_dev_close(s_dev);
@@ -169,11 +143,7 @@ esp_err_t bsp_audio_set_format(uint32_t hz, uint8_t bits, uint8_t ch) {
         .mclk_multiple = 0,          // 0 → 驱动按默认 256xfs 取 MCLK
     };
     int r = esp_codec_dev_open(s_dev, &fs);
-    if (r != 0) {
-        ESP_LOGE(TAG, "esp_codec_dev_open 失败: %d", r);
-        bsp_audio_session_end();
-        return ESP_FAIL;
-    }
+    if (r != 0) { ESP_LOGE(TAG, "esp_codec_dev_open 失败: %d", r); return ESP_FAIL; }
 
     // ⚠ open 之后【不要】手动覆写 ES8311 的时钟分频寄存器(REG01~06):
     //   驱动已按采样率与 MCLK 精确算好,覆写会导致 ADC/DAC 时序错乱、录音回放全是杂音。
@@ -182,32 +152,19 @@ esp_err_t bsp_audio_set_format(uint32_t hz, uint8_t bits, uint8_t ch) {
 
     s_opened = true; s_hz = hz; s_bits = bits; s_ch = ch;
     ESP_LOGI(TAG, "codec 打开 %luHz/%ubit/%uch", (unsigned long)hz, bits, ch);
-    bsp_audio_session_end();
     return ESP_OK;
 }
 
 esp_err_t bsp_audio_write(const void *pcm, size_t bytes) {
     if (!s_dev) return ESP_ERR_INVALID_STATE;
-    if (bytes == 0U) return ESP_OK;
-    if (!pcm || bytes > INT_MAX) return ESP_ERR_INVALID_SIZE;
-    if (!bsp_audio_session_begin(UINT32_MAX)) return ESP_ERR_TIMEOUT;
-    esp_err_t result = esp_codec_dev_write(s_dev, (void *)pcm, (int)bytes) == 0 ? ESP_OK : ESP_FAIL;
-    bsp_audio_session_end();
-    return result;
+    return esp_codec_dev_write(s_dev, (void *)pcm, bytes) == 0 ? ESP_OK : ESP_FAIL;
 }
 
 esp_err_t bsp_audio_read(void *pcm, size_t bytes) {
     if (!s_dev) return ESP_ERR_INVALID_STATE;
-    if (bytes == 0U) return ESP_OK;
-    if (!pcm || bytes > INT_MAX) return ESP_ERR_INVALID_SIZE;
-    if (!bsp_audio_session_begin(UINT32_MAX)) return ESP_ERR_TIMEOUT;
-    esp_err_t result = esp_codec_dev_read(s_dev, pcm, (int)bytes) == 0 ? ESP_OK : ESP_FAIL;
-    bsp_audio_session_end();
-    return result;
+    return esp_codec_dev_read(s_dev, pcm, bytes) == 0 ? ESP_OK : ESP_FAIL;
 }
 
 void bsp_audio_set_volume(uint8_t percent) {
-    if (!s_dev || !bsp_audio_session_begin(UINT32_MAX)) return;
-    esp_codec_dev_set_out_vol(s_dev, percent);
-    bsp_audio_session_end();
+    if (s_dev) esp_codec_dev_set_out_vol(s_dev, percent);
 }

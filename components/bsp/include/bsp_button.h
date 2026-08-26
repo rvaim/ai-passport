@@ -13,10 +13,10 @@ typedef enum {
 } bsp_btn_t;
 
 typedef enum {
-    BSP_BTN_PRESS = 0,   // 每次按下立即触发;UP/DOWN 导航只使用此事件
-    BSP_BTN_CLICK,       // OK 短按抬起后触发
-    BSP_BTN_DOUBLE,      // 保留 ABI;当前产品输入层不注册双击
-    BSP_BTN_LONG,        // OK 持续 600ms
+    BSP_BTN_PRESS = 0,   // 按下瞬间(低延迟,适合游戏类即时响应)
+    BSP_BTN_CLICK,       // 单击(按下并抬起)
+    BSP_BTN_DOUBLE,      // 双击
+    BSP_BTN_LONG,        // 长按
 } bsp_btn_ev_t;
 
 // 按键事件回调。运行于 button 组件的定时器任务,勿在其中阻塞或做重活。

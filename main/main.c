@@ -1,340 +1,468 @@
-// Product shell: a Cordis-inspired registry makes built-in capabilities and
-// downloaded packages follow one lifecycle. The home screen is the registry view.
-#include "app_registry.h"
-#include "bsp_audio.h"
 #include "bsp_battery.h"
 #include "bsp_button.h"
 #include "bsp_display.h"
 #include "bsp_i2c.h"
-#include "bsp_pins.h"
-#include "device_identity.h"
-#include "device_settings.h"
-#include "plugin_manager.h"
-#include "plugin_host.h"
-#include "plugin_installer.h"
-#include "nearby_service.h"
-#include "system_plugins.h"
-#include "ui_pixel.h"
-#include "ui_theme.h"
-
-#include "esp_heap_caps.h"
+#include "passport_app_registry.h"
+#include "passport_identity.h"
+#include "passport_link.h"
+#include "passport_package.h"
+#include "passport_runtime.h"
+#include "passport_settings.h"
+#include "passport_storage.h"
+#include "passport_theme.h"
+#include "passport_ui.h"
 #include "esp_log.h"
+#include "nvs_flash.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
-#include "lvgl.h"
-#include "nvs_flash.h"
+#include <stdio.h>
+#include <string.h>
 
-#include <stddef.h>
-#include <stdatomic.h>
+static const char *TAG = "passport_main";
+#define EVENT_QUEUE_DEPTH 16
+#define SETTINGS_ROW_COUNT 4
 
-#define HOME_QUICK_COUNT 2U
-#define HOME_VISIBLE_ROWS 4U
-#define INPUT_QUEUE_DEPTH 32U
+typedef enum {
+    VIEW_LAUNCHER = 0,
+    VIEW_PLUGINS,
+    VIEW_PLUGIN_DETAIL,
+    VIEW_SETTINGS,
+    VIEW_THEMES,
+    VIEW_LUA_APP,
+} view_t;
+
+typedef enum {
+    EVENT_KEY = 1,
+    EVENT_LINK_FRAME,
+    EVENT_PACKAGE_INSTALLED,
+} event_type_t;
 
 typedef struct {
-    bsp_btn_t button;
-    bsp_btn_ev_t event;
-} input_event_t;
+    event_type_t type;
+    union {
+        struct { bsp_btn_t btn; bsp_btn_ev_t ev; } key;
+        struct {
+            passport_link_frame_t frame;
+            uint8_t payload[PASSPORT_LINK_MAX_PAYLOAD];
+        } link;
+    } data;
+} system_event_t;
 
-static const char *TAG = "main";
-static lv_obj_t *s_home_screen;
-static lv_obj_t *s_quick_panels[HOME_QUICK_COUNT];
-static lv_obj_t *s_quick_icons[HOME_QUICK_COUNT];
-static lv_obj_t *s_quick_names[HOME_QUICK_COUNT];
-static lv_obj_t *s_plugin_rows[HOME_VISIBLE_ROWS];
-static lv_obj_t *s_plugin_labels[HOME_VISIBLE_ROWS];
-static lv_obj_t *s_plugin_count;
-static lv_obj_t *s_empty_panel;
-static size_t s_selected;
-static QueueHandle_t s_input_queue;
-static _Atomic uint32_t s_dropped_inputs;
-static bool s_suppress_wake_ok;
+static QueueHandle_t s_events;
+static view_t s_view;
+static passport_page_t *s_page;
+static passport_ui_list_t *s_list;
+static size_t s_plugin_detail_index;
+static bool s_plugin_uninstall_armed;
+static lv_obj_t *s_plugin_detail_notice;
+static passport_theme_info_t s_themes[PASSPORT_MAX_INSTALLED_THEMES];
+static size_t s_theme_count;
+static passport_settings_wake_guard_t s_wake_guard;
 
-static bool is_action_event(bsp_btn_t button, bsp_btn_ev_t event)
+static const passport_setting_id_t SETTINGS_ROWS[SETTINGS_ROW_COUNT] = {
+    PASSPORT_SETTING_BRIGHTNESS,
+    PASSPORT_SETTING_SCREEN_TIMEOUT,
+    PASSPORT_SETTING_VOLUME,
+    PASSPORT_SETTING_KEY_SOUND,
+};
+
+static const char *const SETTINGS_NAMES[SETTINGS_ROW_COUNT] = {
+    "屏幕亮度",
+    "息屏时间",
+    "系统音量",
+    "按键音",
+};
+
+static void destroy_native_view(void)
 {
-    return (event == BSP_BTN_PRESS &&
-            (button == BSP_BTN_UP || button == BSP_BTN_DOWN)) ||
-           (button == BSP_BTN_OK &&
-            (event == BSP_BTN_CLICK || event == BSP_BTN_LONG));
-}
-
-static void set_entry_style(lv_obj_t *panel, lv_obj_t *label,
-                            bool selected, bool available)
-{
-    ui_pixel_set_selected(panel, selected, available);
-    lv_obj_set_style_text_color(label,
-        lv_color_hex(available ? UI_INK : UI_TEXT_MUTED), 0);
-}
-
-static void home_refresh(void)
-{
-    const size_t count = app_registry_count();
-    const size_t pinned = app_registry_pinned_count();
-    const size_t package_count = count > pinned ? count - pinned : 0U;
-
-    if (count == 0U) return;
-    if (s_selected >= count) s_selected = 0U;
-
-    for (size_t index = 0; index < HOME_QUICK_COUNT; ++index) {
-        const app_plugin_info_t *entry = app_registry_get(index);
-        if (!entry) continue;
-        lv_label_set_text(s_quick_icons[index], entry->icon);
-        lv_label_set_text(s_quick_names[index], entry->name);
-        set_entry_style(s_quick_panels[index], s_quick_names[index],
-                        s_selected == index, entry->available);
-        lv_obj_set_style_text_color(s_quick_icons[index],
-            lv_color_hex(entry->available ? UI_INK : UI_TEXT_MUTED), 0);
+    if (s_list) {
+        passport_ui_list_destroy(s_list);
+        s_list = NULL;
     }
+    if (s_page) {
+        passport_ui_page_destroy(s_page);
+        s_page = NULL;
+    }
+    s_plugin_detail_notice = NULL;
+}
 
-    lv_label_set_text_fmt(s_plugin_count, "%u 个", (unsigned)package_count);
-    if (package_count == 0U) {
-        lv_obj_remove_flag(s_empty_panel, LV_OBJ_FLAG_HIDDEN);
-        for (size_t row = 0; row < HOME_VISIBLE_ROWS; ++row) {
-            lv_obj_add_flag(s_plugin_rows[row], LV_OBJ_FLAG_HIDDEN);
+static void show_launcher(void)
+{
+    if (passport_runtime_running()) passport_runtime_stop();
+    destroy_native_view();
+    passport_app_registry_scan();
+
+    s_page = passport_ui_page_create("Passport", true, true);
+    s_list = passport_ui_list_create(s_page, 3 + PASSPORT_MAX_INSTALLED_APPS);
+    passport_ui_list_add(s_list, "插件管理");
+    passport_ui_list_add(s_list, "设置");
+    passport_ui_list_add(s_list, "主题");
+    for (size_t i = 0; i < passport_app_registry_count(); ++i) {
+        const passport_app_info_t *app = passport_app_registry_get(i);
+        if (app) passport_ui_list_add(s_list, app->manifest.name);
+    }
+    passport_ui_page_set_actions(s_page, "打开", "主页");
+    passport_ui_page_show(s_page);
+    s_view = VIEW_LAUNCHER;
+}
+
+static void show_plugins(void)
+{
+    destroy_native_view();
+    passport_app_registry_scan();
+    s_page = passport_ui_page_create("插件管理", true, true);
+    s_list = passport_ui_list_create(s_page, 1 + PASSPORT_MAX_INSTALLED_APPS);
+    passport_ui_list_add(s_list, passport_link_connected() ? "蓝牙已连接，可安装" : "等待蓝牙安装");
+    for (size_t i = 0; i < passport_app_registry_count(); ++i) {
+        const passport_app_info_t *app = passport_app_registry_get(i);
+        char row[80];
+        if (!app) continue;
+        snprintf(row, sizeof(row), "%s  %s", app->manifest.name, app->manifest.version);
+        passport_ui_list_add(s_list, row);
+    }
+    passport_ui_page_set_actions(s_page, "详情", "主页");
+    passport_ui_page_show(s_page);
+    s_view = VIEW_PLUGINS;
+}
+
+static void show_plugin_detail(size_t app_index)
+{
+    const passport_app_info_t *app = passport_app_registry_get(app_index);
+    if (!app) return;
+    destroy_native_view();
+    s_plugin_detail_index = app_index;
+    s_plugin_uninstall_armed = false;
+    s_page = passport_ui_page_create("插件详情", true, true);
+    char line[160];
+    snprintf(line, sizeof(line), "%s\n版本：%s\n标识：%s", app->manifest.name,
+             app->manifest.version, app->manifest.id);
+    passport_ui_label_create(s_page, line);
+    s_plugin_detail_notice = passport_ui_label_create(s_page, "");
+    s_list = passport_ui_list_create(s_page, 2);
+    passport_ui_list_add(s_list, "返回插件列表");
+    passport_ui_list_add(s_list, "卸载插件");
+    passport_ui_page_set_actions(s_page, "打开", "主页");
+    passport_ui_page_show(s_page);
+    s_view = VIEW_PLUGIN_DETAIL;
+}
+
+static void format_setting_value(passport_setting_id_t id,
+                                 uint16_t value,
+                                 char *out,
+                                 size_t capacity)
+{
+    if (id == PASSPORT_SETTING_BRIGHTNESS || id == PASSPORT_SETTING_VOLUME) {
+        snprintf(out, capacity, "%u%%", (unsigned)value);
+    } else if (id == PASSPORT_SETTING_KEY_SOUND) {
+        snprintf(out, capacity, "%s", value ? "开启" : "关闭");
+    } else if (value == 0U) {
+        snprintf(out, capacity, "从不");
+    } else if (value < 60U) {
+        snprintf(out, capacity, "%u 秒", (unsigned)value);
+    } else {
+        snprintf(out, capacity, "%u 分钟", (unsigned)(value / 60U));
+    }
+}
+
+static void refresh_settings(void)
+{
+    if (!s_page || !s_list) return;
+    for (size_t i = 0; i < SETTINGS_ROW_COUNT; ++i) {
+        uint16_t value = 0U;
+        char text[24];
+        if (!passport_settings_get(SETTINGS_ROWS[i], &value)) continue;
+        format_setting_value(SETTINGS_ROWS[i], value, text, sizeof(text));
+        passport_ui_list_set_value(s_list, i, text);
+    }
+    const size_t selected = passport_ui_list_selected(s_list);
+    passport_ui_page_set_actions(
+        s_page,
+        selected < SETTINGS_ROW_COUNT &&
+                SETTINGS_ROWS[selected] == PASSPORT_SETTING_KEY_SOUND
+            ? "切换" : "调整",
+        "主页");
+}
+
+static void show_settings(void)
+{
+    destroy_native_view();
+    s_page = passport_ui_page_create("设置", true, true);
+    s_list = passport_ui_list_create(s_page, SETTINGS_ROW_COUNT);
+    for (size_t i = 0; i < SETTINGS_ROW_COUNT; ++i) {
+        passport_ui_list_add_value(s_list, SETTINGS_NAMES[i], "");
+    }
+    char info[128];
+    snprintf(info, sizeof(info), "设备码 %s\n主题 %s",
+             passport_identity_code(), passport_theme_current_id());
+    passport_ui_label_create(s_page, info);
+    refresh_settings();
+    passport_ui_page_show(s_page);
+    s_view = VIEW_SETTINGS;
+}
+
+static void show_themes(void)
+{
+    destroy_native_view();
+    s_theme_count = passport_theme_list(s_themes, PASSPORT_MAX_INSTALLED_THEMES);
+    s_page = passport_ui_page_create("主题", true, true);
+    s_list = passport_ui_list_create(s_page, PASSPORT_MAX_INSTALLED_THEMES);
+    for (size_t i = 0; i < s_theme_count; ++i) {
+        char row[80];
+        snprintf(row, sizeof(row), "%s%s", s_themes[i].name,
+                 strcmp(s_themes[i].id, passport_theme_current_id()) == 0 ? "  当前" : "");
+        passport_ui_list_add(s_list, row);
+    }
+    passport_ui_page_set_actions(s_page, "应用", "主页");
+    passport_ui_page_show(s_page);
+    s_view = VIEW_THEMES;
+}
+
+static void launch_selected_plugin(size_t registry_index)
+{
+    const passport_app_info_t *app = passport_app_registry_get(registry_index);
+    if (!app) return;
+    destroy_native_view();
+    esp_err_t err = passport_runtime_start(app);
+    if (err == ESP_OK) {
+        s_view = VIEW_LUA_APP;
+        return;
+    }
+    ESP_LOGE(TAG, "启动插件失败 %s: %s", app->manifest.id, esp_err_to_name(err));
+    show_launcher();
+}
+
+static void handle_launcher_key(bsp_btn_t btn, bsp_btn_ev_t ev)
+{
+    if (ev != BSP_BTN_CLICK || !s_list) return;
+    if (btn == BSP_BTN_UP) passport_ui_list_move(s_list, -1);
+    else if (btn == BSP_BTN_DOWN) passport_ui_list_move(s_list, 1);
+    else if (btn == BSP_BTN_OK) {
+        size_t selected = passport_ui_list_selected(s_list);
+        if (selected == 0) show_plugins();
+        else if (selected == 1) show_settings();
+        else if (selected == 2) show_themes();
+        else launch_selected_plugin(selected - 3);
+    }
+}
+
+static void handle_plugins_key(bsp_btn_t btn, bsp_btn_ev_t ev)
+{
+    if (ev != BSP_BTN_CLICK || !s_list) return;
+    if (btn == BSP_BTN_UP) passport_ui_list_move(s_list, -1);
+    else if (btn == BSP_BTN_DOWN) passport_ui_list_move(s_list, 1);
+    else if (btn == BSP_BTN_OK) {
+        size_t selected = passport_ui_list_selected(s_list);
+        if (selected > 0) show_plugin_detail(selected - 1);
+    }
+}
+
+static void handle_plugin_detail_key(bsp_btn_t btn, bsp_btn_ev_t ev)
+{
+    if (ev != BSP_BTN_CLICK || !s_list) return;
+    if (btn == BSP_BTN_UP || btn == BSP_BTN_DOWN) {
+        passport_ui_list_move(s_list, btn == BSP_BTN_UP ? -1 : 1);
+        if (s_plugin_uninstall_armed) {
+            s_plugin_uninstall_armed = false;
+            passport_ui_label_set_text(s_plugin_detail_notice, "");
+            passport_ui_page_set_actions(s_page, "打开", "主页");
         }
         return;
     }
-    lv_obj_add_flag(s_empty_panel, LV_OBJ_FLAG_HIDDEN);
+    if (btn != BSP_BTN_OK) return;
+    if (passport_ui_list_selected(s_list) == 0) {
+        show_plugins();
+        return;
+    }
+    const passport_app_info_t *app = passport_app_registry_get(s_plugin_detail_index);
+    if (!app) { show_plugins(); return; }
+    if (!s_plugin_uninstall_armed) {
+        s_plugin_uninstall_armed = true;
+        passport_ui_page_set_actions(s_page, "确认卸载", "主页");
+        passport_ui_label_set_text(s_plugin_detail_notice, "再按一次确定卸载");
+        return;
+    }
+    char id[PASSPORT_MANIFEST_ID_MAX];
+    snprintf(id, sizeof(id), "%s", app->manifest.id);
+    esp_err_t err = passport_package_uninstall(PASSPORT_PACKAGE_APP, id);
+    ESP_LOGI(TAG, "卸载 %s: %s", id, esp_err_to_name(err));
+    show_plugins();
+}
 
-    size_t selected_package = s_selected >= pinned ? s_selected - pinned : 0U;
-    size_t window = 0U;
-    if (package_count > HOME_VISIBLE_ROWS && selected_package >= HOME_VISIBLE_ROWS) {
-        window = selected_package - HOME_VISIBLE_ROWS + 1U;
+static void handle_themes_key(bsp_btn_t btn, bsp_btn_ev_t ev)
+{
+    if (ev != BSP_BTN_CLICK || !s_list || s_theme_count == 0) return;
+    if (btn == BSP_BTN_UP) passport_ui_list_move(s_list, -1);
+    else if (btn == BSP_BTN_DOWN) passport_ui_list_move(s_list, 1);
+    else if (btn == BSP_BTN_OK) {
+        size_t selected = passport_ui_list_selected(s_list);
+        if (selected < s_theme_count && passport_theme_apply(s_themes[selected].id) == ESP_OK) show_themes();
     }
-    if (package_count > HOME_VISIBLE_ROWS &&
-        window + HOME_VISIBLE_ROWS > package_count) {
-        window = package_count - HOME_VISIBLE_ROWS;
+}
+
+static void handle_settings_key(bsp_btn_t btn, bsp_btn_ev_t ev)
+{
+    if (ev != BSP_BTN_CLICK || !s_list) return;
+    if (btn == BSP_BTN_UP || btn == BSP_BTN_DOWN) {
+        passport_ui_list_move(s_list, btn == BSP_BTN_UP ? -1 : 1);
+        refresh_settings();
+        return;
     }
-    for (size_t row = 0; row < HOME_VISIBLE_ROWS; ++row) {
-        size_t package_index = window + row;
-        if (package_index >= package_count) {
-            lv_obj_add_flag(s_plugin_rows[row], LV_OBJ_FLAG_HIDDEN);
+    if (btn != BSP_BTN_OK) return;
+    const size_t selected = passport_ui_list_selected(s_list);
+    if (selected >= SETTINGS_ROW_COUNT) return;
+    esp_err_t err = passport_settings_cycle(SETTINGS_ROWS[selected]);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "修改设置失败: %s", esp_err_to_name(err));
+        return;
+    }
+    if (SETTINGS_ROWS[selected] == PASSPORT_SETTING_VOLUME) {
+        passport_settings_sound_preview();
+    }
+    refresh_settings();
+}
+
+static bool consume_screen_wake(bsp_btn_t btn, bsp_btn_ev_t ev)
+{
+    const bool woke = passport_settings_note_activity();
+    const bool terminal = ev == BSP_BTN_CLICK || ev == BSP_BTN_DOUBLE ||
+                          ev == BSP_BTN_LONG;
+    return passport_settings_model_consume_wake(
+        &s_wake_guard, (uint8_t)btn, ev == BSP_BTN_PRESS, terminal, woke);
+}
+
+static bool is_key_sound_event(bsp_btn_t btn, bsp_btn_ev_t ev)
+{
+    return ev == BSP_BTN_CLICK || (btn == BSP_BTN_OK && ev == BSP_BTN_LONG);
+}
+
+static void handle_key_event(bsp_btn_t btn, bsp_btn_ev_t ev)
+{
+    /* 长按确定是系统级返回，不交给插件；不加入人为 debounce delay。 */
+    if (btn == BSP_BTN_OK && ev == BSP_BTN_LONG) {
+        show_launcher();
+        return;
+    }
+    switch (s_view) {
+    case VIEW_LAUNCHER: handle_launcher_key(btn, ev); break;
+    case VIEW_PLUGINS: handle_plugins_key(btn, ev); break;
+    case VIEW_PLUGIN_DETAIL: handle_plugin_detail_key(btn, ev); break;
+    case VIEW_SETTINGS: handle_settings_key(btn, ev); break;
+    case VIEW_THEMES: handle_themes_key(btn, ev); break;
+    case VIEW_LUA_APP: passport_runtime_handle_key(btn, ev); break;
+    default: break;
+    }
+}
+
+static void on_button(bsp_btn_t btn, bsp_btn_ev_t ev, void *user)
+{
+    (void)user;
+    if (!s_events) return;
+    system_event_t event = {.type = EVENT_KEY};
+    event.data.key.btn = btn;
+    event.data.key.ev = ev;
+    xQueueSend(s_events, &event, 0);
+}
+
+static void on_link_frame(const passport_link_frame_t *frame, void *user)
+{
+    (void)user;
+    if (!s_events || !frame || frame->payload_len > PASSPORT_LINK_MAX_PAYLOAD) return;
+    system_event_t event = {.type = EVENT_LINK_FRAME};
+    event.data.link.frame = *frame;
+    if (frame->payload_len) memcpy(event.data.link.payload, frame->payload, frame->payload_len);
+    event.data.link.frame.payload = NULL;
+    xQueueSend(s_events, &event, 0);
+}
+
+static void on_package_install(esp_err_t result, const passport_package_result_t *package, void *user)
+{
+    (void)result;
+    (void)package;
+    (void)user;
+    if (!s_events) return;
+    system_event_t event = {.type = EVENT_PACKAGE_INSTALLED};
+    xQueueSend(s_events, &event, 0);
+}
+
+static void system_task(void *arg)
+{
+    (void)arg;
+    system_event_t event;
+    while (xQueueReceive(s_events, &event, portMAX_DELAY) == pdTRUE) {
+        if (event.type == EVENT_KEY &&
+            consume_screen_wake(event.data.key.btn, event.data.key.ev)) {
             continue;
         }
-        size_t entry_index = pinned + package_index;
-        const app_plugin_info_t *entry = app_registry_get(entry_index);
-        lv_obj_remove_flag(s_plugin_rows[row], LV_OBJ_FLAG_HIDDEN);
-        lv_label_set_text_fmt(s_plugin_labels[row], "%s  %s", entry->icon, entry->name);
-        set_entry_style(s_plugin_rows[row], s_plugin_labels[row],
-                        s_selected == entry_index, entry->available);
-    }
-}
-
-static void home_build(void)
-{
-    app_registry_refresh();
-    s_home_screen = ui_pixel_screen_create("主页");
-
-    for (size_t index = 0; index < HOME_QUICK_COUNT; ++index) {
-        int x = 8 + (int)index * 116;
-        s_quick_panels[index] = ui_pixel_panel_create(
-            s_home_screen, x, 38, 108, 52, UI_PAPER);
-        s_quick_icons[index] = ui_pixel_label(
-            s_quick_panels[index], "", UI_FONT_TITLE, UI_INK);
-        lv_obj_align(s_quick_icons[index], LV_ALIGN_TOP_MID, 0, -4);
-        s_quick_names[index] = ui_pixel_label(
-            s_quick_panels[index], "", UI_FONT_BODY, UI_INK);
-        lv_obj_align(s_quick_names[index], LV_ALIGN_BOTTOM_MID, 0, 3);
-    }
-
-    lv_obj_t *heading = ui_pixel_label(
-        s_home_screen, "插件", UI_FONT_BODY, UI_INK);
-    lv_obj_set_pos(heading, 10, 100);
-    s_plugin_count = ui_pixel_label(
-        s_home_screen, "", UI_FONT_BODY, UI_INK);
-    lv_obj_set_pos(s_plugin_count, 126, 100);
-    lv_obj_set_width(s_plugin_count, 104);
-    lv_obj_set_style_text_align(s_plugin_count, LV_TEXT_ALIGN_RIGHT, 0);
-
-    for (size_t row = 0; row < HOME_VISIBLE_ROWS; ++row) {
-        s_plugin_rows[row] = ui_pixel_panel_create(
-            s_home_screen, 10, 120 + (int)row * 41, 220, 35, UI_PAPER);
-        s_plugin_labels[row] = ui_pixel_label(
-            s_plugin_rows[row], "", UI_FONT_BODY, UI_INK);
-        lv_obj_set_width(s_plugin_labels[row], 190);
-        lv_label_set_long_mode(s_plugin_labels[row], LV_LABEL_LONG_DOT);
-        lv_obj_align(s_plugin_labels[row], LV_ALIGN_LEFT_MID, 3, 0);
-    }
-
-    s_empty_panel = ui_pixel_empty_state(
-        s_home_screen, 10, 120, 220, 76, "暂无插件\n请从插件页安装");
-
-    ui_pixel_action_bar(s_home_screen, "选择", "打开", "");
-
-    home_refresh();
-    lv_screen_load(s_home_screen);
-}
-
-static void return_home(void)
-{
-    app_registry_exit();
-    home_build();
-}
-
-static void open_selected(void)
-{
-    const app_plugin_info_t *entry = app_registry_get(s_selected);
-    if (!entry || !entry->available) return;
-
-    lv_obj_delete(s_home_screen);
-    s_home_screen = NULL;
-    esp_err_t result = app_registry_enter(s_selected);
-    if (result != ESP_OK) {
-        ESP_LOGE(TAG, "cannot open %s: %s", entry->id, esp_err_to_name(result));
-        home_build();
-    }
-}
-
-static void handle_key(bsp_btn_t button, bsp_btn_ev_t event)
-{
-    if (s_suppress_wake_ok && button == BSP_BTN_OK &&
-        (event == BSP_BTN_CLICK || event == BSP_BTN_LONG)) {
-        s_suppress_wake_ok = false;
-        device_settings_note_activity();
-        return;
-    }
-    if (device_settings_note_activity()) {
-        if (button == BSP_BTN_OK && event == BSP_BTN_PRESS) {
-            s_suppress_wake_ok = true;
+        if (!bsp_lvgl_lock(1000)) continue;
+        if (event.type == EVENT_KEY) {
+            handle_key_event(event.data.key.btn, event.data.key.ev);
+        } else if (event.type == EVENT_LINK_FRAME && s_view == VIEW_LUA_APP) {
+            event.data.link.frame.payload = event.data.link.payload;
+            passport_runtime_handle_link(&event.data.link.frame);
+        } else if (event.type == EVENT_PACKAGE_INSTALLED) {
+            if (s_view == VIEW_PLUGINS) show_plugins();
+            else if (s_view == VIEW_THEMES) show_themes();
         }
-        return;
-    }
-    if (!bsp_lvgl_lock(500)) return;
-
-    if (app_registry_active()) {
-        app_registry_key(button, event);
-        if (app_registry_take_home_request()) return_home();
-    } else if (s_home_screen) {
-        size_t count = app_registry_count();
-        if (count > 0U && event == BSP_BTN_PRESS && button == BSP_BTN_UP) {
-            s_selected = (s_selected + count - 1U) % count;
-            home_refresh();
-        } else if (count > 0U && event == BSP_BTN_PRESS && button == BSP_BTN_DOWN) {
-            s_selected = (s_selected + 1U) % count;
-            home_refresh();
-        } else if (event == BSP_BTN_CLICK && button == BSP_BTN_OK) {
-            open_selected();
-        }
-    }
-    bsp_lvgl_unlock();
-    if (is_action_event(button, event)) device_settings_key_feedback();
-}
-
-static void input_task(void *argument)
-{
-    input_event_t input;
-    (void)argument;
-
-    for (;;) {
-        if (xQueueReceive(s_input_queue, &input, portMAX_DELAY) == pdTRUE) {
-            uint32_t dropped = atomic_exchange_explicit(
-                &s_dropped_inputs, 0U, memory_order_relaxed);
-            if (dropped > 0U) ESP_LOGW(TAG, "input queue dropped %u events", (unsigned)dropped);
-            handle_key(input.button, input.event);
+        bsp_lvgl_unlock();
+        if (event.type == EVENT_KEY &&
+            is_key_sound_event(event.data.key.btn, event.data.key.ev)) {
+            passport_settings_key_feedback();
         }
     }
 }
 
-// The button timer task must remain free to sample the next physical press.
-static void on_key(bsp_btn_t button, bsp_btn_ev_t event, void *user)
+static esp_err_t init_nvs(void)
 {
-    input_event_t input = {
-        .button = button,
-        .event = event,
-    };
-    (void)user;
-
-    if (xQueueSend(s_input_queue, &input, 0) != pdTRUE) {
-        atomic_fetch_add_explicit(&s_dropped_inputs, 1U, memory_order_relaxed);
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
     }
-}
-
-static esp_err_t input_system_init(void)
-{
-    s_input_queue = xQueueCreate(INPUT_QUEUE_DEPTH, sizeof(input_event_t));
-    if (!s_input_queue) return ESP_ERR_NO_MEM;
-    if (xTaskCreate(input_task, "app_input", 3584, NULL, 5, NULL) != pdPASS) {
-        vQueueDelete(s_input_queue);
-        s_input_queue = NULL;
-        return ESP_ERR_NO_MEM;
-    }
-    return ESP_OK;
+    return err;
 }
 
 void app_main(void)
 {
-    uint32_t services = 0U;
+    ESP_LOGI(TAG, "Passport Platform v1 启动");
+    ESP_ERROR_CHECK(init_nvs());
+    ESP_ERROR_CHECK(passport_identity_init());
+    ESP_ERROR_CHECK(bsp_i2c_init());
 
-    ESP_LOGI(TAG, "Passport plugin shell v2.6.0 starting");
-    esp_err_t nvs_result = nvs_flash_init();
-    if (nvs_result != ESP_OK) {
-        ESP_LOGE(TAG, "NVS init failed without erasing existing data: %s",
-                 esp_err_to_name(nvs_result));
-    }
-
-    bsp_i2c_init();
-    bsp_i2c_scan();
     if (bsp_display_init() != ESP_OK || !bsp_lvgl_init()) {
-        ESP_LOGE(TAG, "display unavailable (MOSI=%d SCLK=%d CS=%d DC=%d BL=%d)",
-                 BSP_LCD_MOSI, BSP_LCD_SCLK, BSP_LCD_CS, BSP_LCD_DC, BSP_LCD_BL);
+        ESP_LOGE(TAG, "显示初始化失败，系统无法启动");
         return;
     }
-    bsp_display_backlight(100U);
-    services |= APP_SERVICE_DISPLAY;
-
-    bool audio_available = bsp_audio_init() == ESP_OK;
-    bool battery_available = bsp_battery_init() == ESP_OK;
-    if (audio_available) services |= APP_SERVICE_AUDIO;
-    esp_err_t settings_result = device_settings_init(audio_available);
-    if (settings_result == ESP_OK) services |= APP_SERVICE_SETTINGS;
-    else ESP_LOGE(TAG, "settings service unavailable: %s",
-                  esp_err_to_name(settings_result));
-    plugin_host_system_init(audio_available);
-
-    esp_err_t identity_result = device_identity_init();
-    if (identity_result == ESP_OK) services |= APP_SERVICE_IDENTITY;
-    else ESP_LOGE(TAG, "device identity unavailable: %s", esp_err_to_name(identity_result));
-
-    esp_err_t installer_result = plugin_installer_init();
-    if (installer_result == ESP_OK) services |= APP_SERVICE_STORAGE;
-    else ESP_LOGE(TAG, "plugin store unavailable: %s", esp_err_to_name(installer_result));
-    if (installer_result == ESP_OK) ui_theme_init();
-
-    esp_err_t nearby_result = nearby_service_system_init(audio_available);
-    if (nearby_result != ESP_OK) {
-        ESP_LOGE(TAG, "nearby service unavailable: %s",
-                 esp_err_to_name(nearby_result));
+    esp_err_t settings_err = passport_settings_init();
+    if (settings_err != ESP_OK) {
+        ESP_LOGE(TAG, "设置服务初始化不完整: %s", esp_err_to_name(settings_err));
     }
 
-    esp_err_t manager_result = plugin_manager_init();
-    if (installer_result == ESP_OK && identity_result == ESP_OK &&
-        nearby_result == ESP_OK && manager_result == ESP_OK) {
-        services |= APP_SERVICE_NEARBY;
-    } else if (manager_result != ESP_OK) {
-        ESP_LOGE(TAG, "plugin manager unavailable: %s", esp_err_to_name(manager_result));
+    esp_err_t storage_err = passport_storage_init();
+    if (storage_err != ESP_OK) ESP_LOGE(TAG, "插件存储不可用: %s", esp_err_to_name(storage_err));
+    bool battery_ok = bsp_battery_init() == ESP_OK;
+    passport_theme_init();
+    passport_ui_init(battery_ok);
+
+    s_events = xQueueCreate(EVENT_QUEUE_DEPTH, sizeof(system_event_t));
+    if (!s_events) {
+        ESP_LOGE(TAG, "系统事件队列创建失败");
+        return;
+    }
+    if (xTaskCreate(system_task, "passport_system", 6144, NULL, 5, NULL) != pdPASS) {
+        ESP_LOGE(TAG, "系统任务创建失败");
+        return;
     }
 
-    esp_err_t system_plugin_result = system_plugins_init(battery_available);
-    if (system_plugin_result != ESP_OK) {
-        ESP_LOGW(TAG, "system plugin unavailable: %s",
-                 esp_err_to_name(system_plugin_result));
-    }
-    app_registry_init(services);
-    esp_err_t input_result = input_system_init();
+    ESP_ERROR_CHECK(bsp_button_init(on_button, NULL));
+    passport_link_set_rx_callback(on_link_frame, NULL);
+    passport_link_set_install_callback(on_package_install, NULL);
+    esp_err_t link_err = passport_link_init();
+    if (link_err != ESP_OK) ESP_LOGE(TAG, "Passport Link 启动失败: %s", esp_err_to_name(link_err));
 
     if (bsp_lvgl_lock(1000)) {
-        home_build();
+        show_launcher();
         bsp_lvgl_unlock();
     }
-    bool buttons_available = input_result == ESP_OK &&
-                             bsp_button_init(on_key, NULL) == ESP_OK;
-
-    ESP_LOGI(TAG, "ready: buttons=%d audio=%d battery=%d plugins=%u code=%s",
-             buttons_available, audio_available, battery_available,
-             (unsigned)(app_registry_count() - app_registry_pinned_count()),
-             device_identity_code());
-    ESP_LOGI(TAG, "8-bit heap: free=%u largest=%u",
-             (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
-             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    ESP_LOGI(TAG, "系统就绪，设备码=%s", passport_identity_code());
 }

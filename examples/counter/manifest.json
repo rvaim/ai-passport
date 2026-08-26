@@ -1,0 +1,10 @@
+{
+  "type": "app",
+  "id": "com.folotoy.counter",
+  "name": "计数器",
+  "version": "1.0.0",
+  "api": 1,
+  "runtime": "lua",
+  "entry": "main.lua",
+  "permissions": ["ui"]
+}
