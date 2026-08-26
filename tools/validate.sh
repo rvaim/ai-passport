@@ -48,7 +48,9 @@ run_static_checks() {
         managed_components/espressif__lua/lua/onelua.c \
         -lm -o "${test_dir}/lua"
     "${test_dir}/lua" tests/test_counter_plugin.lua examples/counter/main.lua
+    "${test_dir}/lua" tests/test_agent_auth_plugin.lua examples/agent-auth-panel/main.lua
     node tests/test_web_installer_protocol.mjs
+    node tests/test_passport_auth_protocol.mjs
     python3 tests/test_generate_ui_font.py
     python3 tests/test_pack_pap.py
     rm -rf "${test_dir}"

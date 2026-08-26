@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Added the installable Agent authorization panel PAP and an editable Web Bluetooth demo. The panel displays one compact JSON request, lets the user choose up to three options, sends the result over Passport Link, and replays duplicate request IDs for delivery retries; the demo connects to an already-open panel, previews the exact 200-byte-bounded payload, sends requests or cancellations, and shows device responses.
 - Rebuilt the native Settings app around four direct, persistent controls: 50%-default display brightness, 30%-default system volume with asynchronous preview, a 30-second-default screen timeout, and a key-sound switch that defaults off. A single bounded worker coalesces NVS writes and lazily initializes audio; the first key sequence after screen-off now wakes without activating the hidden UI. Linking the real ES8311/I2S path brings the final application image to 1,203,424 bytes, still leaving 62% of the factory partition free.
 - Fixed blank UI text by enabling the LVGL decoder required by the generated RLE-compressed font; static validation and component configuration now reject a compressed-font/decoder mismatch.
 - Replaced the incomplete built-in CJK subset with a reproducible 14 px / 4 bpp Noto Sans SC font covering all 3,755 GB2312 level-one common ideographs and two Font Awesome navigation icons; 16 alpha levels remove the visible 2 bpp edge quantization, while static checks lock the source graph, profile, icon range, and decoder.

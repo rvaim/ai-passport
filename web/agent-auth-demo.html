@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#d9edf5">
+  <title>Agent 授权 Demo · Passport</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Microsoft YaHei", sans-serif;
+      color: #17202a;
+      background: #d9edf5;
+      font-synthesis: none;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      padding: clamp(24px, 5vw, 58px) 16px 32px;
+      background: #d9edf5;
+    }
+
+    button,
+    input,
+    textarea { font: inherit; }
+
+    button {
+      -webkit-tap-highlight-color: transparent;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+    }
+
+    .page {
+      width: min(100%, 1120px);
+      margin: 0 auto;
+    }
+
+    .masthead {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin: 0 0 24px;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 48px;
+      height: 48px;
+      flex: 0 0 auto;
+      place-items: center;
+      color: #fff;
+      background: #0872c9;
+      border-radius: 14px;
+      box-shadow: 0 8px 18px rgba(23, 32, 42, .18);
+    }
+
+    .brand-mark svg {
+      width: 28px;
+      height: 28px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p { margin-top: 0; }
+
+    h1 {
+      margin-bottom: 5px;
+      font-size: clamp(26px, 5vw, 38px);
+      line-height: 1.08;
+      letter-spacing: -.03em;
+    }
+
+    .masthead p {
+      margin-bottom: 0;
+      color: #44545f;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .console {
+      overflow: hidden;
+      background: #f8faf8;
+      border: 2px solid #17202a;
+      border-radius: 16px;
+      box-shadow: 0 16px 30px rgba(23, 32, 42, .14);
+    }
+
+    .connection {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 22px;
+      align-items: center;
+      padding: 22px 26px;
+      background: #e8f0f3;
+      border-bottom: 1px solid #b8c7cd;
+    }
+
+    .connection h2,
+    .section-heading h2 {
+      margin-bottom: 4px;
+      font-size: 18px;
+      line-height: 1.3;
+      letter-spacing: -.015em;
+    }
+
+    .connection p,
+    .section-heading p {
+      margin-bottom: 0;
+      color: #44545f;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .connection-state {
+      display: flex;
+      min-width: 170px;
+      align-items: center;
+      gap: 9px;
+      color: #44545f;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .status-dot {
+      width: 11px;
+      height: 11px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: #6e7e86;
+    }
+
+    .connection-state[data-kind="working"] .status-dot { background: #0872c9; }
+    .connection-state[data-kind="success"] .status-dot { background: #487f18; }
+    .connection-state[data-kind="error"] .status-dot { background: #b82b25; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.12fr) minmax(330px, .88fr);
+    }
+
+    .editor,
+    .monitor {
+      min-width: 0;
+      padding: 28px 26px 30px;
+    }
+
+    .monitor {
+      border-left: 1px solid #b8c7cd;
+    }
+
+    .section-heading {
+      margin-bottom: 22px;
+    }
+
+    .section-heading h2 {
+      font-size: 20px;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 17px 14px;
+      margin-bottom: 18px;
+    }
+
+    .field {
+      min-width: 0;
+    }
+
+    .field.full { grid-column: 1 / -1; }
+
+    .field label,
+    .options legend {
+      display: block;
+      margin-bottom: 7px;
+      color: #283740;
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .field input,
+    .field textarea {
+      display: block;
+      width: 100%;
+      border: 1px solid #6f8089;
+      border-radius: 10px;
+      padding: 11px 12px;
+      color: #17202a;
+      background: #fff;
+      outline: 0;
+      transition: border-color 150ms ease, box-shadow 150ms ease,
+        background-color 150ms ease;
+    }
+
+    .field input {
+      min-height: 44px;
+    }
+
+    .field textarea {
+      min-height: 116px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .field input:focus,
+    .field textarea:focus {
+      border-color: #0872c9;
+      box-shadow: 0 0 0 3px rgba(8, 114, 201, .16);
+    }
+
+    .field input[aria-invalid="true"],
+    .field textarea[aria-invalid="true"] {
+      border-color: #b82b25;
+      background: #fffafa;
+    }
+
+    .field-note {
+      margin: 7px 0 0;
+      color: #66767e;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .options {
+      margin: 0 0 21px;
+      padding: 0;
+      border: 0;
+    }
+
+    .options legend {
+      padding: 0;
+    }
+
+    .option-row {
+      display: grid;
+      grid-template-columns: 23px minmax(105px, .45fr) minmax(0, 1fr);
+      gap: 9px;
+      align-items: center;
+      min-height: 52px;
+      padding: 7px 10px;
+      border-top: 1px solid #d5dfe2;
+    }
+
+    .option-row:last-child {
+      border-bottom: 1px solid #d5dfe2;
+    }
+
+    .option-row input[type="checkbox"] {
+      width: 17px;
+      height: 17px;
+      margin: 0;
+      accent-color: #0872c9;
+    }
+
+    .option-row input[type="text"] {
+      width: 100%;
+      min-height: 36px;
+      border: 1px solid #9aabb2;
+      border-radius: 8px;
+      padding: 7px 9px;
+      color: #17202a;
+      background: #fff;
+      outline: 0;
+    }
+
+    .option-row input[type="text"]:focus {
+      border-color: #0872c9;
+      box-shadow: 0 0 0 3px rgba(8, 114, 201, .13);
+    }
+
+    .option-row input[type="text"]:disabled {
+      color: #829099;
+      background: #eef2f3;
+    }
+
+    .form-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .button {
+      display: inline-flex;
+      min-height: 44px;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: 10px;
+      padding: 0 17px;
+      color: #fff;
+      background: #0872c9;
+      font-weight: 750;
+      line-height: 1.2;
+      text-align: center;
+      transition: background-color 150ms ease, transform 150ms ease,
+        box-shadow 150ms ease;
+    }
+
+    .button:hover:not(:disabled) {
+      background: #075da5;
+      box-shadow: 0 6px 12px rgba(23, 32, 42, .12);
+    }
+
+    .button:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+
+    .button.secondary {
+      color: #17202a;
+      background: #e6eef1;
+      box-shadow: inset 0 0 0 1px #6f8089;
+    }
+
+    .button.secondary:hover:not(:disabled) {
+      background: #d7e4e9;
+      box-shadow: inset 0 0 0 1px #6f8089;
+    }
+
+    .button.tertiary {
+      min-height: 36px;
+      padding: 0 11px;
+      color: #0872c9;
+      background: transparent;
+      box-shadow: inset 0 0 0 1px #9aabb2;
+      font-size: 12px;
+    }
+
+    .button.tertiary:hover:not(:disabled) {
+      color: #075da5;
+      background: #e6eef1;
+      box-shadow: inset 0 0 0 1px #6f8089;
+    }
+
+    .button:disabled {
+      color: #eef2f3;
+      background: #87969d;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .button.secondary:disabled,
+    .button.tertiary:disabled {
+      color: #829099;
+      background: #eef2f3;
+    }
+
+    .button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible {
+      outline: 3px solid rgba(8, 114, 201, .33);
+      outline-offset: 2px;
+    }
+
+    .payload-block {
+      margin-bottom: 24px;
+    }
+
+    .block-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 8px;
+    }
+
+    .block-heading h3 {
+      margin-bottom: 0;
+      font-size: 14px;
+      line-height: 1.3;
+    }
+
+    .payload-meta {
+      color: #66767e;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .payload {
+      min-height: 144px;
+      overflow: auto;
+      margin: 0;
+      padding: 15px;
+      color: #283740;
+      background: #edf4f6;
+      border: 1px solid #b8c7cd;
+      border-radius: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .payload-actions {
+      margin-top: 10px;
+    }
+
+    .response {
+      min-height: 150px;
+      padding: 16px;
+      color: #283740;
+      background: #f5f8f8;
+      border: 1px solid #b8c7cd;
+      border-radius: 10px;
+    }
+
+    .response[data-kind="success"] {
+      background: #eff7eb;
+      border-color: #9bc18c;
+    }
+
+    .response[data-kind="error"] {
+      background: #fce9e7;
+      border-color: #d89a95;
+    }
+
+    .response-summary {
+      margin: 0 0 10px;
+      color: #283740;
+      font-size: 14px;
+      font-weight: 750;
+      line-height: 1.45;
+    }
+
+    .response-json {
+      margin: 0;
+      color: #44545f;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .log-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin: 24px 0 8px;
+    }
+
+    .log-heading h3 {
+      margin-bottom: 0;
+      font-size: 14px;
+      line-height: 1.3;
+    }
+
+    .event-log {
+      min-height: 92px;
+      max-height: 220px;
+      overflow: auto;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      border-top: 1px solid #d5dfe2;
+    }
+
+    .event-log li {
+      display: grid;
+      grid-template-columns: 54px minmax(0, 1fr);
+      gap: 10px;
+      padding: 9px 0;
+      border-bottom: 1px solid #d5dfe2;
+      color: #44545f;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .event-log time {
+      color: #829099;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .event-log code {
+      color: #283740;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+
+    .status {
+      display: flex;
+      gap: 11px;
+      align-items: flex-start;
+      padding: 17px 26px;
+      color: #283740;
+      background: #edf4f6;
+      border-top: 1px solid #b8c7cd;
+    }
+
+    .status .status-dot {
+      margin-top: 4px;
+    }
+
+    .status[data-kind="working"] .status-dot { background: #0872c9; }
+    .status[data-kind="success"] .status-dot { background: #487f18; }
+    .status[data-kind="error"] .status-dot { background: #b82b25; }
+
+    .status strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 14px;
+    }
+
+    .status p {
+      margin-bottom: 0;
+      color: #44545f;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .requirements {
+      margin: 17px 4px 0;
+      color: #44545f;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    noscript {
+      display: block;
+      margin: 14px 0;
+      padding: 12px;
+      color: #811c18;
+      background: #fce9e7;
+      border-radius: 12px;
+    }
+
+    @media (max-width: 820px) {
+      .workspace { grid-template-columns: 1fr; }
+      .monitor {
+        border-top: 1px solid #b8c7cd;
+        border-left: 0;
+      }
+    }
+
+    @media (max-width: 560px) {
+      body { padding-top: 24px; }
+      .masthead { align-items: flex-start; }
+      .connection {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        padding: 20px 19px;
+      }
+      .connection-state { min-width: 0; }
+      .editor,
+      .monitor { padding: 23px 19px 25px; }
+      .field-grid { grid-template-columns: 1fr; }
+      .field.full { grid-column: auto; }
+      .option-row {
+        grid-template-columns: 23px minmax(0, 1fr);
+      }
+      .option-row input[type="text"]:last-child {
+        grid-column: 2;
+      }
+      .form-actions .button { width: 100%; }
+      .status { padding-right: 19px; padding-left: 19px; }
+      .requirements { margin-right: 0; margin-left: 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .button,
+      .field input,
+      .field textarea { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <!--
+  THESIS: A calm local control desk for sending one human-readable authorization request to Passport.
+  OWN-WORLD: Passport's light blue field, dark ink, restrained blue controls, and one crisp utility surface.
+  STORY: Connect the already-open panel, edit the request, inspect the exact payload, then receive the result.
+  FIRST VIEWPORT: Target, editable request, payload preview, and response state remain visible together.
+  FORM: Two-column operator workbench; the right rail is a live wire monitor, not a decorative dashboard.
+  FINISH: Explicit disconnected, unsupported, invalid, working, success, error, empty, and responsive states.
+  -->
+  <main class="page">
+    <header class="masthead">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 8.5 12 3l5 5.5M12 3v13"/>
+          <path d="M5 13.5v5h14v-5M8 18.5v2h8v-2"/>
+        </svg>
+      </span>
+      <div>
+        <h1>Agent 授权 Demo</h1>
+        <p>编辑一条请求，让 Passport 现场确认，再在这里接收结果。</p>
+      </div>
+    </header>
+
+    <noscript>需要启用 JavaScript 才能连接 Passport 并发送授权请求。</noscript>
+
+    <section class="console" aria-label="Agent 授权控制台">
+      <div class="connection">
+        <div>
+          <h2>连接 Passport</h2>
+          <p id="connection-detail">授权面板必须已经在设备上打开；连接后会校验设备码。</p>
+        </div>
+        <div class="connection-state" id="connection-state" data-kind="idle" role="status"
+          aria-live="polite" aria-atomic="true">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="connection-label">未连接</span>
+        </div>
+      </div>
+
+      <div class="workspace">
+        <section class="editor" aria-labelledby="editor-title">
+          <div class="section-heading">
+            <h2 id="editor-title">编辑授权请求</h2>
+            <p>网页只发送下方生成的单条消息；文本按 UTF-8 字节数计入 200 B 限制。</p>
+          </div>
+
+          <form id="request-form">
+            <div class="field-grid">
+              <div class="field">
+                <label for="device-code">Passport 设备码</label>
+                <input id="device-code" type="text" inputmode="text" autocomplete="off"
+                  autocapitalize="characters" spellcheck="false" maxlength="13"
+                  placeholder="XXXXX-XXXXX-X" aria-describedby="device-note" aria-invalid="false">
+                <p class="field-note" id="device-note">输入设备上显示的 XXXXX-XXXXX-X。</p>
+              </div>
+
+              <div class="field">
+                <label for="source-code">Agent source code</label>
+                <input id="source-code" type="text" inputmode="text" autocomplete="off"
+                  autocapitalize="characters" spellcheck="false" maxlength="13"
+                  value="22222-22222-2" aria-describedby="source-note" aria-invalid="false">
+                <p class="field-note" id="source-note">用于设备回传地址，仅用于本次 Demo。</p>
+              </div>
+
+              <div class="field full">
+                <label for="service-id">授权面板 manifest ID</label>
+                <input id="service-id" type="text" autocomplete="off" spellcheck="false"
+                  value="com.folotoy.agent-auth" aria-describedby="service-note" aria-invalid="false">
+                <p class="field-note" id="service-note">必须与设备上已安装的授权面板 ID 一致。</p>
+              </div>
+
+              <div class="field">
+                <label for="request-id">请求 ID</label>
+                <input id="request-id" type="text" autocomplete="off" spellcheck="false"
+                  value="demo-001" maxlength="24" aria-invalid="false">
+              </div>
+
+              <div class="field">
+                <label for="request-title">标题</label>
+                <input id="request-title" type="text" maxlength="24" value="执行命令"
+                  aria-invalid="false">
+              </div>
+
+              <div class="field full">
+                <label for="request-message">授权内容</label>
+                <textarea id="request-message" maxlength="72" aria-invalid="false">是否执行 npm test</textarea>
+                <p class="field-note">不支持换行、双引号、反斜杠或控制字符。</p>
+              </div>
+            </div>
+
+            <fieldset class="options">
+              <legend>选项（至少启用一项）</legend>
+              <div class="option-row">
+                <input id="option-enabled-1" type="checkbox" checked>
+                <input id="option-id-1" type="text" value="once" maxlength="16"
+                  aria-label="选项一 ID">
+                <input id="option-label-1" type="text" value="本次执行" maxlength="18"
+                  aria-label="选项一文字">
+              </div>
+              <div class="option-row">
+                <input id="option-enabled-2" type="checkbox" checked>
+                <input id="option-id-2" type="text" value="always" maxlength="16"
+                  aria-label="选项二 ID">
+                <input id="option-label-2" type="text" value="始终允许" maxlength="18"
+                  aria-label="选项二文字">
+              </div>
+              <div class="option-row">
+                <input id="option-enabled-3" type="checkbox" checked>
+                <input id="option-id-3" type="text" value="cancel" maxlength="16"
+                  aria-label="选项三 ID">
+                <input id="option-label-3" type="text" value="取消" maxlength="18"
+                  aria-label="选项三文字">
+              </div>
+            </fieldset>
+
+            <div class="form-actions">
+              <button class="button" id="send-button" type="submit" disabled>发送授权请求</button>
+              <button class="button secondary" id="connect-button" type="button">连接设备</button>
+              <button class="button tertiary" id="cancel-button" type="button" disabled>发送取消</button>
+            </div>
+          </form>
+        </section>
+
+        <aside class="monitor" aria-labelledby="monitor-title">
+          <div class="section-heading">
+            <h2 id="monitor-title">Link 监视器</h2>
+            <p>这里显示实际发送的 JSON 和设备回传的 response。</p>
+          </div>
+
+          <section class="payload-block" aria-labelledby="payload-title">
+            <div class="block-heading">
+              <h3 id="payload-title">Request payload</h3>
+              <span class="payload-meta" id="payload-bytes">0 B / 200 B</span>
+            </div>
+            <pre class="payload" id="payload-json" aria-live="polite">{}</pre>
+            <div class="form-actions payload-actions">
+              <button class="button tertiary" id="copy-button" type="button">复制 JSON</button>
+            </div>
+          </section>
+
+          <section aria-labelledby="response-title">
+            <div class="block-heading">
+              <h3 id="response-title">Device response</h3>
+            </div>
+            <div class="response" id="response-box" data-kind="idle">
+              <p class="response-summary" id="response-summary">还没有收到设备响应</p>
+              <pre class="response-json" id="response-json"></pre>
+            </div>
+          </section>
+
+          <div class="log-heading">
+            <h3>事件记录</h3>
+            <button class="button tertiary" id="clear-log-button" type="button">清空</button>
+          </div>
+          <ol class="event-log" id="event-log" aria-live="polite">
+            <li><time>现在</time><code>等待编辑请求</code></li>
+          </ol>
+        </aside>
+      </div>
+
+      <div class="status" id="status" data-kind="idle" role="status" aria-live="polite"
+        aria-atomic="true">
+        <span class="status-dot" aria-hidden="true"></span>
+        <div>
+          <strong id="status-title">本地 Demo</strong>
+          <p id="status-detail">填写设备码后连接 Passport，再发送一条可编辑的授权请求。</p>
+        </div>
+      </div>
+    </section>
+
+    <p class="requirements" id="browser-note">
+      请使用桌面版 Chrome 或 Edge，并通过 HTTPS 或 localhost 打开本页。首次连接需要浏览器授权；
+      设备端必须停留在 Agent 授权面板，网页和设备之间只使用当前 Passport Link v1 通道。
+    </p>
+  </main>
+
+  <script type="module" src="./agent-auth-demo.mjs"></script>
+</body>
+</html>

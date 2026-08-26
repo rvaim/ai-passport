@@ -31,6 +31,7 @@ Use this page to discover repository documentation. `authoritative` documents de
 | [platform/plugin-development.md](platform/plugin-development.md) | Lua plugin development, packaging, and install workflow | authoritative |
 | [platform/system-api.md](platform/system-api.md) | Lua and C system API v1 | authoritative |
 | [platform/passport-link.md](platform/passport-link.md) | Public device addressing, Link frames, and BLE install protocol | authoritative |
+| [platform/agent-authorization.md](platform/agent-authorization.md) | Agent authorization panel PAP and compact JSON protocol | authoritative |
 | [platform/package-format.md](platform/package-format.md) | Streaming `.pap` package format | authoritative |
 | [platform/theme-system.md](platform/theme-system.md) | Lightweight inherited theme tokens | authoritative |
 | [platform/migration-log.md](platform/migration-log.md) | Removed, retained, added, and cleanup record | authoritative |

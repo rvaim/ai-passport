@@ -32,6 +32,7 @@
 | [platform/plugin-development.zh_CN.md](./platform/plugin-development.zh_CN.md) | 插件开发 | authoritative | Lua 插件、中文 UI、打包、BLE 安装与资源限制 |
 | [platform/system-api.zh_CN.md](./platform/system-api.zh_CN.md) | 系统 API | authoritative | Lua 与 C 系统 API v1 |
 | [platform/passport-link.zh_CN.md](./platform/passport-link.zh_CN.md) | BLE / Link 协议 | authoritative | 公开设备码、目标校验、消息帧与安装 GATT |
+| [platform/agent-authorization.zh_CN.md](./platform/agent-authorization.zh_CN.md) | Agent 授权面板 | authoritative | PAP 面板、紧凑 JSON 载荷和 Web Demo |
 | [platform/package-format.zh_CN.md](./platform/package-format.zh_CN.md) | `.pap` 包格式 | authoritative | 顺序包、CRC、路径约束和安装事务 |
 | [platform/theme-system.zh_CN.md](./platform/theme-system.zh_CN.md) | 主题系统 | authoritative | 轻量 token 主题与 BLE 安装 |
 | [platform/migration-log.zh_CN.md](./platform/migration-log.zh_CN.md) | 改造记录 | authoritative | 删除、保留、新增和 cleanup 记录 |
