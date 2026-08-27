@@ -10,7 +10,7 @@
 - **系统服务常驻**：BSP、插件存储、包安装、Passport Link、主题和 UI 框架由系统统一管理。
 - **设备设置持久化**：亮度、音量、息屏时间和按键音由系统统一管理并保存到 NVS，插件无需也不能直接访问 BSP。
 - **不做 App Store**：内置中文“插件管理”系统 App，插件和主题通过 BLE 安装。
-- **公开设备码**：每台设备有唯一、可公开分享的设备码，仅用于寻址和避免发错设备，不作为安全密码。
+- **公开设备码**：每台设备有唯一、可公开分享的设备码，安装页将它呈现为配对码；它只用于广播目标匹配、寻址和避免发错设备，不作为安全密码。
 - **中文统一 UI**：系统 App 和标准组件使用简体中文；共享 14 px / 4 bpp Noto Sans SC 字体，覆盖全部 3755 个 GB2312 一级常用汉字，插件不能携带普通 UI 字体或任意指定字号。
 - **不增加人为按键防抖延迟**：按钮回调只投递 press/click/double/long 等事件，慢操作进入系统任务。
 - **功能完成后清理**：删除旧实现、重复 helper、未用 include、临时代码和冗余资源，并重新运行相关测试。
@@ -27,6 +27,7 @@ components/passport_runtime/  单前台 Lua VM 与受限 Passport Lua API
 examples/counter/             “计数器”示例插件
 examples/themes/night/        “夜间主题”示例
 tools/                        .pap 打包/检查、BLE 安装、验证工具
+web/                          本地 Web Bluetooth .pap 安装器
 docs/platform/                架构、插件/API/协议/包格式/主题/迁移文档
 ```
 
@@ -35,7 +36,7 @@ docs/platform/                架构、插件/API/协议/包格式/主题/迁移
 | 能力 | 平台接口/实现 | 约束 |
 | --- | --- | --- |
 | 显示 | `bsp_display_*` + `passport_ui` | 240×320 RGB565；无触摸；无 PSRAM；持久化亮度首次默认 50% |
-| 输入 | `bsp_button_*` → 系统事件队列 | UP/DOWN/OK 共用 GPIO0 ADC 电阻梯；回调不做慢操作；息屏后的第一次按键序列只负责唤醒 |
+| 输入 | `bsp_button_*` → 系统事件队列 | UP/DOWN/OK 共用 GPIO0 ADC 电阻梯；100 ms 多击判断、原生双击移动两行、800 ms 长按确定；息屏后的第一次按键序列只负责唤醒 |
 | 音频 | `bsp_audio_*` | 音量首次默认 30%；按键音默认关闭；音频 codec 仅在工作任务需要时初始化；当前 Lua API 尚未开放音频 |
 | 电池 | `bsp_battery_*` | 状态栏显示电量；实际精度仍取决于电池 profile |
 | BLE | `passport_link` / Lua `passport.link` | V1 为 NimBLE GATT Peripheral；无系统配对；主动 Central 扫描/连接暂缓 |
@@ -47,6 +48,8 @@ docs/platform/                架构、插件/API/协议/包格式/主题/迁移
 ## 插件体验
 
 `.pap` 是顺序、可流式处理的插件/主题包。系统通过 BLE 接收后先验证目标设备码、包头、Manifest、路径和 CRC，再写入 staging，成功后提交到 `/passport/apps/<id>` 或 `/passport/themes/<id>`。
+
+无外部依赖的[网页安装器](../web/installer.html)支持桌面版 Chrome 或 Edge 选择 `.pap`、输入设备配对码、精确匹配对应的 BLE 广播、通过 GATT 再次复核设备码并显示实时安装进度。浏览器首次使用时会强制要求一次设备授权确认；以后可直接重连已授权且配对码相符的 Passport，不再出现设备列表。页面必须通过 HTTPS 或 localhost 提供；本地启动方式和完整交互状态见[设计说明](../web/DESIGN.zh_CN.md)。
 
 插件使用系统页面容器，例如：
 

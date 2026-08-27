@@ -45,12 +45,12 @@
 
 ### `passport_runtime`
 
-单 Lua VM、单前台 App。Lua heap 设 80 KiB 上限；只开放 base/table/string/math/utf8，关闭 `io`、`os`、`debug`、`package`。退出 App 后销毁页面并关闭 Lua state，释放整个运行时。
+单 Lua VM、单前台 App。Lua heap 设 80 KiB 上限；只开放 base/table/string/math/utf8，关闭 `io`、`os`、`debug`、`package`。固件把有界 cJSON 编解码器作为 `passport.json` 系统 API 开放给所有 PAP，插件无需各自携带解析器。退出 App 后销毁页面并关闭 Lua state，释放整个运行时。
 
 ## 不可破坏的约束
 
-- 不增加人为按键 debounce delay；保留按下/单击/双击/长按状态事件。
-- 长按确定由系统保留为“返回桌面”。
+- 不增加人为按键 debounce delay；使用 100 ms 多击判断窗口，保留按下/单击/双击/长按状态事件，原生页面把 UP/DOWN 双击明确处理为移动两行。
+- 按住确定 800 ms 触发长按，并由系统保留为“返回桌面”。
 - 普通插件不直接调用 LVGL、NimBLE、BSP 或 FreeRTOS task API。
 - UI 文案和系统 App 使用中文。
 - 插件不能携带普通 UI 字体，也不能自由指定字号。

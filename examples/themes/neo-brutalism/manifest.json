@@ -1,0 +1,27 @@
+{
+  "type": "theme",
+  "id": "theme.neo-brutalism",
+  "name": "新粗野主义",
+  "version": "1.1.1",
+  "api": 1,
+  "tokens": {
+    "background": "#FFD84D",
+    "surface": "#FFF7D6",
+    "item_background": "#FFF7D6",
+    "text": "#111111",
+    "muted_text": "#4A3B00",
+    "accent": "#276FD3",
+    "selection_text": "#FFFFFF",
+    "divider": "#111111",
+    "border": "#111111",
+    "shadow": "#111111",
+    "spacing": 8,
+    "radius": 0,
+    "border_width": 2,
+    "shadow_width": 1,
+    "shadow_spread": 0,
+    "shadow_opacity": 255,
+    "shadow_offset_x": 4,
+    "shadow_offset_y": 4
+  }
+}

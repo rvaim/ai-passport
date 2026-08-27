@@ -101,6 +101,8 @@ Do not replace the external resistor with the inaccurate internal pull-up. The B
 
 Calibrate thresholds using multiple boards, charge levels, and reasonable temperatures; leave margin between measured distributions rather than relying only on divider theory.
 
+The button component resolves click multiplicity in a 100 ms window and starts LONG at 800 ms. It emits DOUBLE instead of two CLICK events when the same key is pressed twice inside that window. Native UP/DOWN navigation therefore consumes DOUBLE as an explicit two-row move; this preserves both fast repeated navigation and the distinct event delivered to plug-ins. Native OK actions remain single-click only, while OK LONG is the system Home action.
+
 ## 7. Shared I2C
 
 I2C0 uses SDA GPIO10 and SCL GPIO7. ES8311 is 7-bit address `0x18`; CW2017 is `0x63`. `bsp_i2c.c` exclusively owns the bus.
@@ -183,7 +185,7 @@ General board acceptance:
 
 - Stable USB Serial/JTAG logs without reboot loops, assertions, watchdogs, or persistent errors.
 - I2C scan sees ES8311 at `0x18` and, when fitted, CW2017 at `0x63`.
-- UP/DOWN wraps menu navigation, OK click enters, and OK long press returns.
+- UP/DOWN wraps menu navigation, fast same-direction double presses move two rows without being dropped, OK click enters, and OK long press returns after about 800 ms.
 - An optional peripheral failure disables only its page.
 - Repeated navigation and operation do not leak heap, tasks, timers, or objects.
 
@@ -191,7 +193,7 @@ General board acceptance:
 | --- | --- |
 | Pin/I2C | scan, all shared devices, boot straps, USB logs |
 | LCD | color blocks, orientation, clipping, inversion, byte order, backlight levels |
-| ADC/buttons | released and pressed mV, click/double/long events, margin across battery levels |
+| ADC/buttons | released and pressed mV, 100 ms click/double resolution, two-row native double navigation, 800 ms long event, and margin across battery levels |
 | Settings | 50% first boot, 10% brightness steps, 30% volume preview, 30 s screen-off, consumed wake press, key-sound toggle, and reboot persistence |
 | Codec/I2S | 1 kHz tone, non-zero recording, correct playback speed, format changes, page exit |
 | Battery | plausible SOC/mV, graceful missing-device behavior, intermittent-I2C recovery |

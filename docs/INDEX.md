@@ -36,5 +36,6 @@ Use this page to discover repository documentation. `authoritative` documents de
 | [platform/theme-system.md](platform/theme-system.md) | Lightweight inherited theme tokens | authoritative |
 | [platform/migration-log.md](platform/migration-log.md) | Removed, retained, added, and cleanup record | authoritative |
 | [platform/build-and-delivery.md](platform/build-and-delivery.md) | Build requirements and verification boundaries | authoritative |
+| [../web/DESIGN.md](../web/DESIGN.md) | Web Bluetooth installer usage, interaction, and protocol limits | authoritative |
 
 GitHub community documents: [CONTRIBUTING.md](../.github/CONTRIBUTING.md), [CODE_OF_CONDUCT.md](../.github/CODE_OF_CONDUCT.md), [SECURITY.md](../.github/SECURITY.md), and [SUPPORT.md](../.github/SUPPORT.md).

@@ -11,12 +11,22 @@
 typedef struct {
     uint32_t background;
     uint32_t surface;
+    uint32_t item_background;
     uint32_t text;
     uint32_t muted_text;
     uint32_t accent;
+    uint32_t selection_text;
     uint32_t divider;
+    uint32_t border;
+    uint32_t shadow;
     uint8_t spacing;
     uint8_t radius;
+    uint8_t border_width;
+    uint8_t shadow_width;
+    uint8_t shadow_spread;
+    uint8_t shadow_opacity;
+    int8_t shadow_offset_x;
+    int8_t shadow_offset_y;
 } passport_theme_tokens_t;
 
 typedef struct {
@@ -24,7 +34,7 @@ typedef struct {
     char name[PASSPORT_THEME_NAME_MAX];
 } passport_theme_info_t;
 
-/** Load persisted theme selection or fall back to the built-in compact theme. */
+/** Initialize the current theme from the persisted selection or built-in default. */
 esp_err_t passport_theme_init(void);
 const passport_theme_tokens_t *passport_theme_current(void);
 const char *passport_theme_current_id(void);

@@ -1,4 +1,5 @@
 #include "passport_runtime.h"
+#include "passport_runtime_json.h"
 
 #include "passport_identity.h"
 #include "passport_link.h"
@@ -178,6 +179,7 @@ static void register_passport_api(lua_State *L)
     set_functions(L, app); lua_setfield(L, -2, "app");
     set_functions(L, device); lua_setfield(L, -2, "device");
     set_functions(L, link); lua_setfield(L, -2, "link");
+    passport_runtime_register_json(L); lua_setfield(L, -2, "json");
     lua_setglobal(L, "passport");
 }
 

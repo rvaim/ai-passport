@@ -12,6 +12,24 @@ pack_pap = importlib.util.module_from_spec(spec)
 assert spec.loader
 spec.loader.exec_module(pack_pap)
 
+
+def expect_value_error(manifest: dict) -> None:
+    try:
+        pack_pap.validate_manifest(manifest)
+    except ValueError:
+        return
+    raise AssertionError("invalid manifest was accepted")
+
+
+try:
+    json.loads('{"type":"app","type":"theme"}',
+               object_pairs_hook=pack_pap.exact_object)
+except ValueError:
+    pass
+else:
+    raise AssertionError("duplicate JSON field was accepted")
+
+
 with tempfile.TemporaryDirectory() as td:
     root = Path(td)
     source = root / "app"
@@ -38,5 +56,52 @@ with tempfile.TemporaryDirectory() as td:
     assert not pack_pap.safe_rel("/absolute")
     assert not pack_pap.safe_rel("a\\b")
     assert not pack_pap.safe_rel("资源/icon.bin")
+    assert not pack_pap.safe_rel("a//b")
+    assert not pack_pap.safe_rel("a/")
+
+theme = {
+    "type": "theme", "id": "theme.test", "name": "Test theme",
+    "version": "1.0.0", "api": 1,
+    "tokens": {
+        "background": "#112233", "surface": "#223344",
+        "item_background": "#445566", "text": "#FFFFFF",
+        "muted_text": "#AABBCC", "accent": "#3366CC",
+        "selection_text": "#FFFFFF", "divider": "#111111",
+        "border": "#010203", "shadow": "#000000",
+        "spacing": 8, "radius": 32, "border_width": 4, "shadow_width": 12,
+        "shadow_spread": 6, "shadow_opacity": 255,
+        "shadow_offset_x": -8, "shadow_offset_y": 8,
+    },
+}
+pack_pap.validate_manifest(theme)
+
+bad = {**theme, "tokens": {**theme["tokens"], "shadow_blur": 4}}
+expect_value_error(bad)
+bad = {**theme, "tokens": {**theme["tokens"], "radius": 33}}
+expect_value_error(bad)
+bad = {**theme, "tokens": {**theme["tokens"], "border_width": 1.5}}
+expect_value_error(bad)
+bad = {**theme, "tokens": {**theme["tokens"], "shadow": "black"}}
+expect_value_error(bad)
+bad = {**theme, "tokens": {**theme["tokens"], "background": "112233"}}
+expect_value_error(bad)
+bad = {key: value for key, value in theme.items() if key != "tokens"}
+expect_value_error(bad)
+bad = {**theme, "tokens": {key: value for key, value in theme["tokens"].items()
+                           if key != "surface"}}
+expect_value_error(bad)
+expect_value_error({**theme, "api": 2})
+expect_value_error({**theme, "api": 1.0})
+expect_value_error({**theme, "legacy": True})
+
+app = {
+    "type": "app", "id": "com.example.strict", "name": "Strict",
+    "version": "1.0.0", "api": 1, "runtime": "lua", "entry": "main.lua",
+}
+pack_pap.validate_manifest(app)
+expect_value_error({**app, "permissions": ["ui"]})
+expect_value_error({**app, "api": 2})
+expect_value_error({**app, "api": True})
+expect_value_error({**app, "name": "bad\0name"})
 
 print("PAP packer host tests: PASS")

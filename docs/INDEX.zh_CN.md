@@ -37,6 +37,7 @@
 | [platform/theme-system.zh_CN.md](./platform/theme-system.zh_CN.md) | 主题系统 | authoritative | 轻量 token 主题与 BLE 安装 |
 | [platform/migration-log.zh_CN.md](./platform/migration-log.zh_CN.md) | 改造记录 | authoritative | 删除、保留、新增和 cleanup 记录 |
 | [platform/build-and-delivery.zh_CN.md](./platform/build-and-delivery.zh_CN.md) | 构建与交付 | authoritative | 固件构建环境、验证边界和禁止伪造产物 |
+| [../web/DESIGN.zh_CN.md](../web/DESIGN.zh_CN.md) | 网页安装器 | authoritative | Web Bluetooth 安装器的使用方式、交互状态和协议边界 |
 
 ## GitHub 社区治理文档
 

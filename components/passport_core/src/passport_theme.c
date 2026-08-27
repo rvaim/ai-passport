@@ -2,12 +2,10 @@
 
 #include "passport_package.h"
 #include "passport_storage.h"
-#include "cJSON.h"
+#include "passport_theme_parser.h"
 #include "esp_log.h"
 #include "nvs.h"
-#include "nvs_flash.h"
 #include <dirent.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,29 +14,26 @@ static const char *TAG = "passport_theme";
 static const passport_theme_tokens_t DEFAULT_THEME = {
     .background = 0xF5F2E8,
     .surface = 0xFFFFFF,
+    .item_background = 0xF5F2E8,
     .text = 0x17202A,
     .muted_text = 0x66727A,
     .accent = 0x1677FF,
+    .selection_text = 0xFFFFFF,
     .divider = 0xD8DCE0,
+    .border = 0xD8DCE0,
+    .shadow = 0x000000,
     .spacing = 6,
     .radius = 4,
+    .border_width = 0,
+    .shadow_width = 0,
+    .shadow_spread = 0,
+    .shadow_opacity = 0,
+    .shadow_offset_x = 0,
+    .shadow_offset_y = 0,
 };
 
 static passport_theme_tokens_t s_tokens;
 static char s_current_id[PASSPORT_THEME_ID_MAX] = "default";
-
-static bool parse_color(cJSON *item, uint32_t *out)
-{
-    if (!cJSON_IsString(item) || !item->valuestring) return false;
-    const char *s = item->valuestring;
-    if (s[0] == '#') ++s;
-    if (strlen(s) != 6) return false;
-    char *end = NULL;
-    unsigned long value = strtoul(s, &end, 16);
-    if (!end || *end != '\0' || value > 0xFFFFFFUL) return false;
-    *out = (uint32_t)value;
-    return true;
-}
 
 static esp_err_t load_theme_file(const char *id, passport_theme_tokens_t *out, char *name, size_t name_cap)
 {
@@ -60,53 +55,17 @@ static esp_err_t load_theme_file(const char *id, passport_theme_tokens_t *out, c
     }
 
     passport_manifest_t manifest;
-    err = passport_package_parse_manifest_json(
-        json, json_len, PASSPORT_PACKAGE_THEME, &manifest);
-    if (err != ESP_OK || strcmp(manifest.id, id) != 0) {
-        free(json);
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    cJSON *doc = cJSON_ParseWithLength(json, json_len);
-    if (!doc) {
-        free(json);
-        return ESP_ERR_INVALID_ARG;
-    }
-    cJSON *tokens = cJSON_GetObjectItemCaseSensitive(doc, "tokens");
-    bool ok = cJSON_IsObject(tokens);
-    if (!ok) {
-        cJSON_Delete(doc);
-        free(json);
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    passport_theme_tokens_t next = DEFAULT_THEME;
-    cJSON *item;
-    item = cJSON_GetObjectItemCaseSensitive(tokens, "background"); if (item && !parse_color(item, &next.background)) ok = false;
-    item = cJSON_GetObjectItemCaseSensitive(tokens, "surface"); if (item && !parse_color(item, &next.surface)) ok = false;
-    item = cJSON_GetObjectItemCaseSensitive(tokens, "text"); if (item && !parse_color(item, &next.text)) ok = false;
-    item = cJSON_GetObjectItemCaseSensitive(tokens, "muted_text"); if (item && !parse_color(item, &next.muted_text)) ok = false;
-    item = cJSON_GetObjectItemCaseSensitive(tokens, "accent"); if (item && !parse_color(item, &next.accent)) ok = false;
-    item = cJSON_GetObjectItemCaseSensitive(tokens, "divider"); if (item && !parse_color(item, &next.divider)) ok = false;
-    item = cJSON_GetObjectItemCaseSensitive(tokens, "spacing");
-    if (item) {
-        if (!cJSON_IsNumber(item) || item->valueint < 2 || item->valueint > 12) ok = false;
-        else next.spacing = (uint8_t)item->valueint;
-    }
-    item = cJSON_GetObjectItemCaseSensitive(tokens, "radius");
-    if (item) {
-        if (!cJSON_IsNumber(item) || item->valueint < 0 || item->valueint > 12) ok = false;
-        else next.radius = (uint8_t)item->valueint;
-    }
-    if (ok) *out = next;
-    if (ok && name && name_cap) {
-        size_t manifest_name_len = strlen(manifest.name);
-        if (manifest_name_len >= name_cap) ok = false;
-        else memcpy(name, manifest.name, manifest_name_len + 1);
-    }
-    cJSON_Delete(doc);
+    passport_theme_tokens_t parsed;
+    err = passport_theme_parse_manifest_json(json, json_len, &manifest, &parsed);
     free(json);
-    return ok ? ESP_OK : ESP_ERR_INVALID_ARG;
+    if (err != ESP_OK || strcmp(manifest.id, id) != 0) return ESP_ERR_INVALID_ARG;
+    if (name) {
+        size_t name_len = strlen(manifest.name);
+        if (name_cap == 0U || name_len >= name_cap) return ESP_ERR_INVALID_SIZE;
+        memcpy(name, manifest.name, name_len + 1U);
+    }
+    *out = parsed;
+    return err;
 }
 
 static void persist_current(const char *id)

@@ -21,6 +21,7 @@ python3 tools/inspect_pap.py examples/agent-auth-panel/dist/agent-auth-panel.pap
 {"v":1,"kind":"request","rid":"a-001","title":"执行命令","message":"是否执行 npm test","options":[["once","本次执行"],["cancel","取消"]]}
 ~~~
 
-Link payload 必须保持在 200 个 UTF-8 字节以内。V1 文本字段不能包含控制字符、
-双引号或反斜杠。相同 source code 和 rid 的重复请求会直接重发上次结果，不会
-再次询问用户；这只是传输重试机制，不是安全功能。
+Link payload 必须保持在 200 个 UTF-8 字节以内。文本字段不能包含控制字符；双引号
+和反斜杠使用标准 JSON 转义，并由所有 PAP 共用的 `passport.json` 系统 API 解码。
+source code、request ID 与规范化内容均相同的重复请求会直接重发上次结果，不会再次
+询问用户；这只是传输重试机制，不是安全功能。

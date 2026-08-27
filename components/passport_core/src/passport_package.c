@@ -2,7 +2,6 @@
 
 #include "passport_crc32.h"
 #include "passport_storage.h"
-#include "cJSON.h"
 #include "esp_log.h"
 #include <errno.h>
 #include <stdbool.h>
@@ -16,7 +15,6 @@ static const char *TAG = "passport_package";
 static const uint8_t PAP_MAGIC[4] = {'P', 'A', 'P', '1'};
 #define PAP_HEADER_SIZE 16U
 #define PAP_ENTRY_HEADER_SIZE 12U
-#define PAP_PATH_MAX 120U
 #define PAP_COPY_CHUNK 512U
 
 static uint16_t read_le16(const uint8_t *p)
@@ -27,22 +25,6 @@ static uint16_t read_le16(const uint8_t *p)
 static uint32_t read_le32(const uint8_t *p)
 {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-}
-
-static bool valid_id_char(char c)
-{
-    return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_';
-}
-
-bool passport_package_id_is_valid(const char *id)
-{
-    if (!id || !id[0]) return false;
-    size_t length = 0;
-    while (id[length]) {
-        if (length >= PASSPORT_MANIFEST_ID_MAX - 1 || !valid_id_char(id[length])) return false;
-        ++length;
-    }
-    return length > 0;
 }
 
 static esp_err_t join_path(char *out, size_t capacity, const char *root, const char *relative)
@@ -59,79 +41,6 @@ static esp_err_t join_path(char *out, size_t capacity, const char *root, const c
     return ESP_OK;
 }
 
-bool passport_package_path_is_safe(const char *path)
-{
-    if (!path || !path[0] || path[0] == '/' || strlen(path) >= PAP_PATH_MAX) return false;
-    if (strchr(path, '\\')) return false;
-    for (const unsigned char *p = (const unsigned char *)path; *p; ++p) {
-        bool portable = (*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') ||
-                        (*p >= '0' && *p <= '9') || *p == '.' || *p == '_' ||
-                        *p == '-' || *p == '/';
-        if (!portable) return false;
-    }
-    const char *segment = path;
-    for (const char *p = path; ; ++p) {
-        if (*p == '/' || *p == '\0') {
-            size_t len = (size_t)(p - segment);
-            if (len == 0 || (len == 1 && segment[0] == '.') ||
-                (len == 2 && segment[0] == '.' && segment[1] == '.')) return false;
-            if (*p == '\0') break;
-            segment = p + 1;
-        }
-    }
-    return true;
-}
-
-esp_err_t passport_package_parse_manifest_json(const char *json, size_t len,
-                                               passport_package_kind_t header_kind,
-                                               passport_manifest_t *out)
-{
-    if (!json || len == 0 || !out ||
-        (header_kind != PASSPORT_PACKAGE_APP && header_kind != PASSPORT_PACKAGE_THEME)) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    cJSON *root = cJSON_ParseWithLength(json, len);
-    if (!root) return ESP_ERR_INVALID_ARG;
-
-    cJSON *kind = cJSON_GetObjectItemCaseSensitive(root, "type");
-    cJSON *id = cJSON_GetObjectItemCaseSensitive(root, "id");
-    cJSON *name = cJSON_GetObjectItemCaseSensitive(root, "name");
-    cJSON *version = cJSON_GetObjectItemCaseSensitive(root, "version");
-    cJSON *entry = cJSON_GetObjectItemCaseSensitive(root, "entry");
-    cJSON *runtime = cJSON_GetObjectItemCaseSensitive(root, "runtime");
-    cJSON *api = cJSON_GetObjectItemCaseSensitive(root, "api");
-
-    const char *expected_kind = header_kind == PASSPORT_PACKAGE_APP ? "app" : "theme";
-    bool ok = cJSON_IsString(kind) && strcmp(kind->valuestring, expected_kind) == 0 &&
-              cJSON_IsString(id) && passport_package_id_is_valid(id->valuestring) &&
-              cJSON_IsString(name) && name->valuestring[0] &&
-              cJSON_IsString(version) && version->valuestring[0] &&
-              cJSON_IsNumber(api) && api->valuedouble >= 1 && api->valuedouble <= UINT32_MAX &&
-              api->valuedouble == (double)(uint32_t)api->valuedouble;
-    if (header_kind == PASSPORT_PACKAGE_APP) {
-        ok = ok && cJSON_IsString(entry) && passport_package_path_is_safe(entry->valuestring) &&
-             strlen(entry->valuestring) < PASSPORT_MANIFEST_ENTRY_MAX &&
-             cJSON_IsString(runtime) && strcmp(runtime->valuestring, "lua") == 0;
-    }
-    if (!ok || strlen(name->valuestring) >= PASSPORT_MANIFEST_NAME_MAX ||
-        strlen(version->valuestring) >= PASSPORT_MANIFEST_VERSION_MAX) {
-        cJSON_Delete(root);
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    memset(out, 0, sizeof(*out));
-    out->kind = header_kind;
-    memcpy(out->id, id->valuestring, strlen(id->valuestring) + 1);
-    memcpy(out->name, name->valuestring, strlen(name->valuestring) + 1);
-    memcpy(out->version, version->valuestring, strlen(version->valuestring) + 1);
-    if (header_kind == PASSPORT_PACKAGE_APP) {
-        memcpy(out->entry, entry->valuestring, strlen(entry->valuestring) + 1);
-    }
-    out->api = (uint32_t)api->valuedouble;
-    cJSON_Delete(root);
-    return ESP_OK;
-}
-
 static esp_err_t read_header(FILE *f, passport_package_kind_t *kind, uint32_t *manifest_len, uint32_t *entry_count)
 {
     uint8_t h[PAP_HEADER_SIZE];
@@ -143,7 +52,8 @@ static esp_err_t read_header(FILE *f, passport_package_kind_t *kind, uint32_t *m
     if (k != PASSPORT_PACKAGE_APP && k != PASSPORT_PACKAGE_THEME) return ESP_ERR_INVALID_ARG;
     uint32_t mlen = read_le32(h + 8);
     uint32_t count = read_le32(h + 12);
-    if (mlen == 0 || mlen > PASSPORT_PACKAGE_MANIFEST_MAX || count > 64) {
+    if (mlen == 0 || mlen > PASSPORT_PACKAGE_MANIFEST_MAX ||
+        count > PASSPORT_PACKAGE_MAX_ENTRIES) {
         return ESP_ERR_INVALID_SIZE;
     }
     *kind = (passport_package_kind_t)k;
@@ -162,7 +72,8 @@ static esp_err_t read_manifest(FILE *f, passport_package_kind_t kind, uint32_t m
         return ESP_ERR_INVALID_SIZE;
     }
     json[manifest_len] = '\0';
-    esp_err_t err = passport_package_parse_manifest_json(json, manifest_len, kind, manifest);
+    esp_err_t err = passport_package_parse_manifest_json(
+        json, manifest_len, kind, manifest);
     if (err != ESP_OK) {
         free(json);
         return err;
@@ -190,11 +101,13 @@ static esp_err_t copy_entry(FILE *package, const char *stage_root, uint32_t *pay
     uint8_t eh[PAP_ENTRY_HEADER_SIZE];
     if (fread(eh, 1, sizeof(eh), package) != sizeof(eh)) return ESP_ERR_INVALID_SIZE;
     uint16_t path_len = read_le16(eh);
+    uint16_t flags = read_le16(eh + 2);
     uint32_t size = read_le32(eh + 4);
     uint32_t expected_crc = read_le32(eh + 8);
-    if (path_len == 0 || path_len >= PAP_PATH_MAX || size > 4U * 1024U * 1024U) return ESP_ERR_INVALID_SIZE;
+    if (path_len == 0 || path_len >= PASSPORT_PACKAGE_PATH_MAX || flags != 0U ||
+        size > PASSPORT_PACKAGE_ENTRY_MAX_BYTES) return ESP_ERR_INVALID_SIZE;
 
-    char relative[PAP_PATH_MAX];
+    char relative[PASSPORT_PACKAGE_PATH_MAX];
     if (fread(relative, 1, path_len, package) != path_len) return ESP_ERR_INVALID_SIZE;
     relative[path_len] = '\0';
     if (!passport_package_path_is_safe(relative) || strcmp(relative, "manifest.json") == 0) return ESP_ERR_INVALID_ARG;
@@ -204,6 +117,8 @@ static esp_err_t copy_entry(FILE *package, const char *stage_root, uint32_t *pay
     char dest[256];
     err = join_path(dest, sizeof(dest), stage_root, relative);
     if (err != ESP_OK) return err;
+    struct stat existing;
+    if (stat(dest, &existing) == 0) return ESP_ERR_INVALID_ARG;
     FILE *out = fopen(dest, "wb");
     if (!out) return ESP_FAIL;
 
@@ -288,6 +203,11 @@ esp_err_t passport_package_install(const char *package_path, passport_package_re
     uint32_t payload_bytes = 0;
     for (uint32_t i = 0; err == ESP_OK && i < entry_count; ++i) {
         err = copy_entry(f, stage, &payload_bytes);
+    }
+    if (err == ESP_OK) {
+        int trailing = fgetc(f);
+        if (trailing != EOF) err = ESP_ERR_INVALID_SIZE;
+        else if (ferror(f)) err = ESP_FAIL;
     }
     free(manifest_json);
     fclose(f);

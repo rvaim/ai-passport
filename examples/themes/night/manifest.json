@@ -2,16 +2,26 @@
   "type": "theme",
   "id": "theme.night",
   "name": "夜间主题",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "api": 1,
   "tokens": {
     "background": "#111318",
     "surface": "#1C2028",
+    "item_background": "#1C2028",
     "text": "#F4F6F8",
     "muted_text": "#A6AFBA",
     "accent": "#63A4FF",
+    "selection_text": "#111318",
     "divider": "#343A46",
+    "border": "#343A46",
+    "shadow": "#000000",
     "spacing": 6,
-    "radius": 4
+    "radius": 4,
+    "border_width": 1,
+    "shadow_width": 0,
+    "shadow_spread": 0,
+    "shadow_opacity": 0,
+    "shadow_offset_x": 0,
+    "shadow_offset_y": 0
   }
 }

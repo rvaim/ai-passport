@@ -18,7 +18,7 @@ The tracked `dependencies.lock` pins Managed Component resolution. After changin
 
 Firmware validation uses a fresh temporary build directory and an isolated `sdkconfig` generated from the tracked defaults. It does not consume or overwrite a developer's root `sdkconfig`, and it copies only the verified merged image to `build/FoloToy-AI-Passport-full.bin`.
 
-The baseline contains hardware-independent host tests for Passport Link frame encoding/validation, the settings value/wake-suppression model, the `.pap` package format, and the UI font's CMake source graph/common-Chinese charset:
+The baseline contains hardware-independent host tests for Passport Link frame encoding/validation, native input navigation policy, the settings value/wake-suppression model, the Web installer protocol, the `.pap` package format, exact manifest/theme parsing, the system JSON API running against the real Lua and cJSON sources, and the UI font's CMake source graph/common-Chinese charset. The Web test requires Node.js 18 or newer; the cJSON-backed host tests run when ESP-IDF 5.5.3 is activated:
 
 ```bash
 cc -std=c11 -Wall -Wextra -Werror \
@@ -28,6 +28,11 @@ cc -std=c11 -Wall -Wextra -Werror \
   components/passport_link/src/passport_link_protocol.c \
   -o /tmp/test_passport_link_protocol
 /tmp/test_passport_link_protocol
+cc -std=c11 -Wall -Wextra -Werror \
+  -Itests/host_stubs -Icomponents/bsp/include -Imain \
+  tests/test_passport_input_policy.c -o /tmp/test_passport_input_policy
+/tmp/test_passport_input_policy
+node tests/test_web_installer_protocol.mjs
 python3 tests/test_generate_ui_font.py
 python3 tests/test_pack_pap.py
 python3 tools/generate_ui_font.py --check

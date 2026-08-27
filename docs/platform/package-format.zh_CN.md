@@ -2,9 +2,12 @@
 
 # `.pap` 包格式 v1
 
-`.pap` 是面向低 RAM MCU 的顺序二进制包，不使用 ZIP，设备可以边读边写。
+`.pap` 是面向低 RAM MCU 的顺序小端包，不使用 ZIP；设备会逐个校验并写入 Entry，
+不需要把整个包放入内存。
 
-## Header（16 B，小端）
+## Header
+
+16 字节 Header 后紧跟 UTF-8 JSON Manifest。
 
 ```text
 magic[4] = PAP1
@@ -14,7 +17,11 @@ manifest_len:u32
 entry_count:u32
 ```
 
-紧接 UTF-8 JSON manifest。
+Header kind 必须与 Manifest `type` 一致。App Manifest 只能且必须包含 `type`、
+`id`、`name`、`version`、`api`、`runtime`、`entry`；Theme Manifest 只能且必须
+包含 `type`、`id`、`name`、`version`、`api`、`tokens`。API 必须是当前版本 `1`；
+缺失、重复或未知字段都会被拒绝。主题还必须在提交安装前通过完整的
+[18 Token Schema](theme-system.zh_CN.md)。
 
 ## 文件 Entry
 
@@ -27,6 +34,12 @@ path[path_len]
 data[size]
 ```
 
-路径不能是绝对路径、不能包含 `..`、`.` 空段或反斜杠；payload 文件路径仅允许 ASCII 字母、数字、`._-/`，避免 FAT codepage 差异。Manifest 中的插件名称和界面文案仍可使用 UTF-8 中文。manifest 最大 4096 B，单包最多 64 个 payload entry。
+路径必须是相对 ASCII，只允许字母、数字和 `._-/`。绝对路径，空、`.`、`..`
+路径段，反斜杠，重复路径，把 `manifest.json` 作为 payload，非零 flags，CRC
+错误以及包尾多余字节都会被拒绝。显示名称和 Manifest 文本仍可使用 UTF-8 中文。
 
-安装过程：读 header/manifest → 建 `.staging/<id>` → 流式写每个文件并校验 CRC → 检查 App entry 存在 → 旧版本改名 backup → staging 改名 final → 删除 backup。断电原子性不是数据库级别，但失败路径会尽量回滚旧版本。
+当前上限为：Manifest 4096 字节、64 个 payload Entry、路径少于 120 字节、单个
+Entry 最大 4 MiB；Passport Link 还会把整个传输包限制在 4 MiB。
+
+安装时先写入 `.staging/<id>`，校验所有 Entry 和 App 入口文件，再通过临时 backup
+原子替换已安装目录。失败路径会尽量恢复原目录；这是事务安全机制，不是旧格式兼容层。

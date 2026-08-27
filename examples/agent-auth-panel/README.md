@@ -24,6 +24,8 @@ The application payload is a compact JSON request:
 ~~~
 
 The Link payload must remain at most 200 UTF-8 bytes. Text fields cannot
-contain control characters, quotes, or backslashes in v1. A duplicate request
-with the same source code and rid replays the last result without asking
-again; this is a delivery retry aid, not a security feature.
+contain control characters; quotes and backslashes use normal JSON escaping
+and are decoded by the shared `passport.json` system API. A duplicate request
+with the same source code, request ID, and normalized content replays the last
+result without asking again; this is a delivery retry aid, not a security
+feature.

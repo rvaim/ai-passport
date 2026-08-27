@@ -5,6 +5,7 @@ local MAX_OPTIONS = 3
 local MAX_OPTION_ID_BYTES = 16
 local MAX_OPTION_LABEL_BYTES = 18
 
+local json = assert(passport.json, "固件缺少 passport.json")
 local current_request
 local cached_response
 local selected_index = 1
@@ -15,155 +16,6 @@ local content_text = passport.ui.text("等待 Agent 请求\n请保持本页面�
 local options_text = passport.ui.text("")
 local state_text = passport.ui.text("")
 passport.ui.actions("", "主页")
-
-local function is_space(byte)
-    return byte == 9 or byte == 10 or byte == 13 or byte == 32
-end
-
-local function parse_json(input)
-    if type(input) ~= "string" or #input == 0 then
-        error("JSON 为空")
-    end
-
-    local position = 1
-    local null_value = {}
-    local parse_value
-
-    local function skip_space()
-        while position <= #input and is_space(input:byte(position)) do
-            position = position + 1
-        end
-    end
-
-    local function parse_string()
-        if input:sub(position, position) ~= '"' then
-            error("JSON 字符串缺少引号")
-        end
-        position = position + 1
-        local start = position
-        while position <= #input do
-            local byte = input:byte(position)
-            if byte == 34 then
-                local value = input:sub(start, position - 1)
-                position = position + 1
-                return value
-            end
-            if byte == 92 or byte < 32 then
-                error("不支持 JSON 转义或控制字符")
-            end
-            position = position + 1
-        end
-        error("JSON 字符串未闭合")
-    end
-
-    local function parse_number()
-        local start = position
-        if input:sub(position, position) == "-" then position = position + 1 end
-        if input:sub(position, position) == "0" then
-            position = position + 1
-        else
-            if not input:sub(position, position):match("%d") then
-                error("JSON 数字无效")
-            end
-            while input:sub(position, position):match("%d") do position = position + 1 end
-        end
-        if input:sub(position, position) == "." then
-            position = position + 1
-            if not input:sub(position, position):match("%d") then error("JSON 小数无效") end
-            while input:sub(position, position):match("%d") do position = position + 1 end
-        end
-        local exponent = input:sub(position, position)
-        if exponent == "e" or exponent == "E" then
-            position = position + 1
-            local sign = input:sub(position, position)
-            if sign == "+" or sign == "-" then position = position + 1 end
-            if not input:sub(position, position):match("%d") then error("JSON 指数无效") end
-            while input:sub(position, position):match("%d") do position = position + 1 end
-        end
-        local value = tonumber(input:sub(start, position - 1))
-        if value == nil then error("JSON 数字无效") end
-        return value
-    end
-
-    local function parse_array()
-        local result = {}
-        position = position + 1
-        skip_space()
-        if input:sub(position, position) == "]" then
-            position = position + 1
-            return result
-        end
-        while true do
-            result[#result + 1] = parse_value()
-            skip_space()
-            local delimiter = input:sub(position, position)
-            if delimiter == "]" then
-                position = position + 1
-                return result
-            end
-            if delimiter ~= "," then error("JSON 数组缺少逗号") end
-            position = position + 1
-            skip_space()
-        end
-    end
-
-    local function parse_object()
-        local result = {}
-        local seen = {}
-        position = position + 1
-        skip_space()
-        if input:sub(position, position) == "}" then
-            position = position + 1
-            return result
-        end
-        while true do
-            local key = parse_string()
-            if seen[key] then error("JSON 对象存在重复字段") end
-            seen[key] = true
-            skip_space()
-            if input:sub(position, position) ~= ":" then error("JSON 对象缺少冒号") end
-            position = position + 1
-            result[key] = parse_value()
-            skip_space()
-            local delimiter = input:sub(position, position)
-            if delimiter == "}" then
-                position = position + 1
-                return result
-            end
-            if delimiter ~= "," then error("JSON 对象缺少逗号") end
-            position = position + 1
-            skip_space()
-            if input:sub(position, position) ~= '"' then error("JSON 字段名无效") end
-        end
-    end
-
-    function parse_value()
-        skip_space()
-        local first = input:sub(position, position)
-        if first == '"' then return parse_string() end
-        if first == "[" then return parse_array() end
-        if first == "{" then return parse_object() end
-        if first == "-" or first:match("%d") then return parse_number() end
-        if input:sub(position, position + 3) == "true" then
-            position = position + 4
-            return true
-        end
-        if input:sub(position, position + 4) == "false" then
-            position = position + 5
-            return false
-        end
-        if input:sub(position, position + 3) == "null" then
-            position = position + 4
-            return null_value
-        end
-        error("JSON 值无效")
-    end
-
-    local value = parse_value()
-    skip_space()
-    if position <= #input then error("JSON 尾部存在多余内容") end
-    return value
-end
 
 local function is_ascii_id(value, maximum)
     if type(value) ~= "string" or #value == 0 or #value > maximum then return false end
@@ -182,24 +34,42 @@ local function valid_text(value, maximum, required)
     if type(value) ~= "string" or #value > maximum or (required and #value == 0) then return false end
     for index = 1, #value do
         local byte = value:byte(index)
-        if byte < 32 or byte == 34 or byte == 92 or byte == 127 then return false end
+        if byte < 32 or byte == 127 then return false end
     end
     return true
 end
 
+local function has_exact_fields(value, allowed, expected_count)
+    if type(value) ~= "table" then return false end
+    local count = 0
+    for key in pairs(value) do
+        if not allowed[key] then return false end
+        count = count + 1
+    end
+    return count == expected_count
+end
+
+local REQUEST_FIELDS = {v = true, kind = true, rid = true, title = true,
+                        message = true, options = true}
+local CANCEL_FIELDS = {v = true, kind = true, rid = true}
+
 local function parse_request(raw)
-    if #raw > 200 then error("Link payload 超过 200 字节") end
-    local value = parse_json(raw)
+    if type(raw) ~= "string" or #raw > 200 then error("Link payload 无效") end
+    local value, decode_error = json.decode(raw)
+    if decode_error then error(decode_error) end
     if type(value) ~= "table" or value.v ~= 1 or type(value.kind) ~= "string" then
         error("请求版本或类型无效")
     end
 
     if value.kind == "cancel" then
-        if not is_ascii_id(value.rid, MAX_REQUEST_ID_BYTES) then error("取消请求 ID 无效") end
+        if not has_exact_fields(value, CANCEL_FIELDS, 3) or
+           not is_ascii_id(value.rid, MAX_REQUEST_ID_BYTES) then
+            error("取消请求字段无效")
+        end
         return {kind = "cancel", rid = value.rid}
     end
 
-    if value.kind ~= "request" or
+    if value.kind ~= "request" or not has_exact_fields(value, REQUEST_FIELDS, 6) or
        not is_ascii_id(value.rid, MAX_REQUEST_ID_BYTES) or
        not valid_text(value.title, MAX_TITLE_BYTES, true) or
        not valid_text(value.message, MAX_MESSAGE_BYTES, false) or
@@ -221,25 +91,26 @@ local function parse_request(raw)
         options[index] = {pair[1], pair[2]}
     end
 
-    return {
+    local request = {
         kind = "request",
         rid = value.rid,
         title = value.title,
         message = value.message,
         options = options,
-        raw = raw,
     }
-end
-
-local function json_string(value)
-    return '"' .. value .. '"'
+    -- The signature is an ordered array so semantically identical JSON does
+    -- not depend on Lua object iteration order.
+    local signature_value = json.array({request.title, request.message, options})
+    local signature, encode_error = json.encode(signature_value)
+    if encode_error then error(encode_error) end
+    request.signature = signature
+    return request
 end
 
 local function make_response(rid, status, option)
-    local response = '{"v":1,"kind":"response","rid":' .. json_string(rid) ..
-                     ',"status":' .. json_string(status)
-    if option then response = response .. ',"option":' .. json_string(option) end
-    return response .. "}"
+    local response = {v = 1, kind = "response", rid = rid, status = status}
+    if option then response.option = option end
+    return json.encode(response)
 end
 
 local function set_idle(status)
@@ -269,7 +140,7 @@ local function show_request(request, source_code)
         title = request.title,
         message = request.message,
         options = request.options,
-        raw = request.raw,
+        signature = request.signature,
         source = source_code,
     }
     selected_index = 1
@@ -283,7 +154,8 @@ local function show_request(request, source_code)
 end
 
 local function send_status(source_code, rid, status)
-    passport.link.send(source_code, make_response(rid, status))
+    local payload = make_response(rid, status)
+    if payload then passport.link.send(source_code, payload) end
 end
 
 local function confirm_request()
@@ -291,6 +163,10 @@ local function confirm_request()
     local request = current_request
     local option = request.options[selected_index]
     local response = make_response(request.rid, "selected", option[1])
+    if not response then
+        passport.ui.set_text(state_text, "响应编码失败")
+        return
+    end
     local ok = passport.link.send(request.source, response)
     if not ok then
         passport.ui.set_text(state_text, "发送失败 · 再按确定重试")
@@ -301,7 +177,7 @@ local function confirm_request()
     cached_response = {
         source = request.source,
         rid = request.rid,
-        raw = request.raw,
+        signature = request.signature,
         payload = response,
     }
     current_request = nil
@@ -323,7 +199,9 @@ passport.app.on_message(function(message, source_code)
 
     if current_request then
         if current_request.source == source_code and current_request.rid == request.rid then
-            if current_request.raw ~= request.raw then send_status(source_code, request.rid, "conflict") end
+            if current_request.signature ~= request.signature then
+                send_status(source_code, request.rid, "conflict")
+            end
         else
             send_status(source_code, request.rid, "busy")
         end
@@ -332,7 +210,7 @@ passport.app.on_message(function(message, source_code)
 
     if cached_response and cached_response.source == source_code and
        cached_response.rid == request.rid then
-        if cached_response.raw == request.raw then
+        if cached_response.signature == request.signature then
             passport.link.send(source_code, cached_response.payload)
         else
             send_status(source_code, request.rid, "conflict")
@@ -359,6 +237,7 @@ end)
 
 function on_stop()
     if current_request then
-        passport.link.send(current_request.source, make_response(current_request.rid, "cancelled"))
+        local payload = make_response(current_request.rid, "cancelled")
+        if payload then passport.link.send(current_request.source, payload) end
     end
 end

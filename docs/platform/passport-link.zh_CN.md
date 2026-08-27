@@ -4,15 +4,15 @@
 
 ## 设备码
 
-设备码由 ESP32-C3 工厂 MAC 的 48 位唯一值编码成十个 Base32 字符，再增加一位输入校验字符，例如 `ABCDE-FGHIJ-K`。它公开可分享，只用于设备发现、寻址和避免误发，不承担保密或身份认证职责。
+设备码由 ESP32-C3 工厂 MAC 的 48 位唯一值编码成十个 Base32 字符，再增加一位输入校验字符，例如 `22222-22222-2`。安装页将这个值呈现为配对码。它公开可分享，只用于设备发现、寻址和避免误发，不承担保密或身份认证职责。
 
-BLE 广播名为：
+完整 BLE 名称通过 scan response 返回：
 
 ```text
-Passport-ABCDE-FGHIJ-K
+Passport-22222-22222-2
 ```
 
-连接后客户端还应读取 Device Code characteristic 复核一次。
+主广播包含 128 bit Passport Service UUID，Web Bluetooth 才能通过 service filter 发现设备。连接后客户端仍必须读取 Device Code characteristic，并把读到的值用于目标复核。
 
 ## App 消息帧
 
@@ -45,9 +45,11 @@ Package Data 01000044-474b-5054-524f-505353415031
 Package Stat 01000053-474b-5054-524f-505353415031
 ```
 
-开始控制包为 little-endian：`op:u8=1 + total_size:u32 + crc32:u32 + target_id:u64`。系统比较 `target_id` 后才打开 staging 文件。数据写入 Package Data，建议每片 180 B。结束向 Package Ctrl 写单字节 `0x02`。
+开始控制包为 little-endian：`op:u8=1 + total_size:u32 + crc32:u32 + target_id:u64`。系统比较 `target_id` 后才打开 staging 文件。客户端应先订阅 Package Stat，以有响应写入发送 begin，并等待 `开始接收`；随后用每片 180 B 的有响应写入发送 Package Data，最后向 Package Ctrl 写单字节 `0x02`，等待 `安装成功` 或失败状态。数据写入的响应是固定队列所需的背压，客户端不能把“传输完成”当作“安装成功”。
 
 NimBLE 回调只复制小分片到固定队列；文件写入、CRC 和 `.pap` 安装在 `pap_install` 工作任务执行。
+
+无外部依赖的[网页安装器](../../web/installer.html)实现了完整流程。通过 HTTPS 或 localhost 提供 `web/`，在桌面版 Chrome 或 Edge 中选择 `.pap` 并输入配对码。浏览器设备选择器会发现广播 Passport Service UUID 的设备；连接后网页读取 Device Code characteristic，并要求完整设备码一致。Web Bluetooth 首次允许站点访问设备时，浏览器会强制要求一次明确的授权确认；网页可以直接重连已授权且配对码相符的设备，不再打开设备列表。命令行仍可使用 `tools/ble_install.py`。
 
 ## 安全边界
 

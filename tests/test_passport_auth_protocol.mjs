@@ -55,6 +55,15 @@ assert.throws(
   /不能重复/
 );
 
+const escaped = buildAuthorizationRequest({
+  requestId: "a-escaped",
+  title: "显示符号",
+  message: '执行 "npm" 到 C:\\tmp',
+  options: [["allow", "允许"]],
+});
+assert.equal(JSON.parse(escaped.json).message, '执行 "npm" 到 C:\\tmp');
+assert.ok(escaped.payload.length <= LINK_MAX_PAYLOAD);
+
 const cancel = buildCancelRequest("a-001");
 assert.equal(cancel.json, '{"v":1,"kind":"cancel","rid":"a-001"}');
 

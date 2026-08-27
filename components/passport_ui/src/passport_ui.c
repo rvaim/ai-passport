@@ -73,10 +73,26 @@ static void style_plain(lv_obj_t *obj, uint32_t bg)
     lv_obj_set_style_bg_color(obj, theme_color(bg), 0);
     lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(obj, 0, 0);
+    lv_obj_set_style_shadow_width(obj, 0, 0);
     lv_obj_set_style_radius(obj, 0, 0);
     lv_obj_set_style_pad_all(obj, 0, 0);
     lv_obj_set_style_text_font(obj, passport_ui_font(), 0);
     lv_obj_set_style_text_color(obj, theme_color(t->text), 0);
+}
+
+static void style_list_item(lv_obj_t *item)
+{
+    const passport_theme_tokens_t *t = passport_theme_current();
+    lv_obj_set_style_radius(item, t->radius, 0);
+    lv_obj_set_style_border_width(item, t->border_width, 0);
+    lv_obj_set_style_border_side(item, LV_BORDER_SIDE_FULL, 0);
+    lv_obj_set_style_border_color(item, theme_color(t->border), 0);
+    lv_obj_set_style_shadow_color(item, theme_color(t->shadow), 0);
+    lv_obj_set_style_shadow_width(item, t->shadow_width, 0);
+    lv_obj_set_style_shadow_spread(item, t->shadow_spread, 0);
+    lv_obj_set_style_shadow_offset_x(item, t->shadow_offset_x, 0);
+    lv_obj_set_style_shadow_offset_y(item, t->shadow_offset_y, 0);
+    lv_obj_set_style_shadow_opa(item, t->shadow_opacity, 0);
 }
 
 static void update_status(lv_timer_t *timer)
@@ -240,14 +256,14 @@ static void list_refresh(passport_ui_list_t *list)
     for (size_t i = 0; i < list->count; ++i) {
         passport_ui_list_row_t *row = &list->rows[i];
         const bool selected = i == list->selected;
-        lv_obj_set_style_bg_color(row->root, theme_color(t->accent), 0);
-        lv_obj_set_style_bg_opa(row->root,
-                                selected ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+        lv_obj_set_style_bg_color(row->root,
+                                  theme_color(selected ? t->accent : t->item_background), 0);
+        lv_obj_set_style_bg_opa(row->root, LV_OPA_COVER, 0);
         lv_obj_set_style_text_color(row->label,
-                                    theme_color(selected ? 0xFFFFFF : t->text), 0);
+                                    theme_color(selected ? t->selection_text : t->text), 0);
         if (row->value) {
             lv_obj_set_style_text_color(row->value,
-                                        theme_color(selected ? 0xFFFFFF : t->accent), 0);
+                                        theme_color(selected ? t->selection_text : t->accent), 0);
         }
     }
 }
@@ -269,7 +285,21 @@ passport_ui_list_t *passport_ui_list_create(passport_page_t *page, size_t capaci
     lv_obj_set_width(list->root, LV_PCT(100));
     lv_obj_set_flex_grow(list->root, 1);
     lv_obj_set_flex_flow(list->root, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(list->root, 2, 0);
+    int shadow_blur = t->shadow_width + t->shadow_spread;
+    bool shadow_visible = t->shadow_width > 0 && t->shadow_opacity > 0;
+    int left = shadow_visible ? shadow_blur - t->shadow_offset_x : 0;
+    int right = shadow_visible ? shadow_blur + t->shadow_offset_x : 0;
+    int top = shadow_visible ? shadow_blur - t->shadow_offset_y : 0;
+    int bottom = shadow_visible ? shadow_blur + t->shadow_offset_y : 0;
+    lv_obj_set_style_pad_left(list->root, left > 0 ? left : 0, 0);
+    lv_obj_set_style_pad_right(list->root, right > 0 ? right : 0, 0);
+    lv_obj_set_style_pad_top(list->root, top > 0 ? top : 0, 0);
+    lv_obj_set_style_pad_bottom(list->root, bottom > 0 ? bottom : 0, 0);
+    int row_gap = t->spacing / 2;
+    int shadow_gap = shadow_visible ? t->shadow_spread + abs(t->shadow_offset_y) : 0;
+    if (row_gap < 2) row_gap = 2;
+    if (row_gap < shadow_gap) row_gap = shadow_gap;
+    lv_obj_set_style_pad_row(list->root, row_gap, 0);
     return list;
 }
 
@@ -289,12 +319,13 @@ bool passport_ui_list_add(passport_ui_list_t *list, const char *text)
     lv_obj_set_width(row, LV_PCT(100));
     lv_obj_set_height(row, LIST_ROW_H);
     bool selected = list->count == list->selected;
-    style_label(row, selected ? 0xFFFFFF : t->text);
-    lv_obj_set_style_bg_color(row, theme_color(t->accent), 0);
-    lv_obj_set_style_bg_opa(row, selected ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+    style_label(row, selected ? t->selection_text : t->text);
+    lv_obj_set_style_bg_color(row,
+                              theme_color(selected ? t->accent : t->item_background), 0);
+    lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_left(row, 8, 0);
     lv_obj_set_style_pad_top(row, 6, 0);
-    lv_obj_set_style_radius(row, t->radius, 0);
+    style_list_item(row);
     lv_label_set_long_mode(row, LV_LABEL_LONG_DOT);
     lv_label_set_text(row, text ? text : "");
     list->rows[list->count++] = (passport_ui_list_row_t) {
@@ -312,13 +343,13 @@ bool passport_ui_list_add_value(passport_ui_list_t *list,
     if (!list || list->count >= list->capacity) return false;
     const passport_theme_tokens_t *t = passport_theme_current();
     lv_obj_t *row = lv_obj_create(list->root);
-    style_plain(row, t->background);
+    style_plain(row, t->item_background);
     lv_obj_set_width(row, LV_PCT(100));
     lv_obj_set_height(row, LIST_ROW_H);
     lv_obj_set_style_bg_color(row, theme_color(t->accent), 0);
     lv_obj_set_style_pad_hor(row, 8, 0);
     lv_obj_set_style_pad_column(row, 8, 0);
-    lv_obj_set_style_radius(row, t->radius, 0);
+    style_list_item(row);
     lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);

@@ -133,7 +133,8 @@ static void package_worker(void *arg)
             memcpy(&ctrl, item.bytes, sizeof(ctrl));
             package_reset();
             unlink(PASSPORT_INCOMING_PACKAGE);
-            if (ctrl.target_id != passport_identity_id() || ctrl.total_size == 0 || ctrl.total_size > 4U * 1024U * 1024U) {
+            if (ctrl.target_id != passport_identity_id() || ctrl.total_size == 0 ||
+                ctrl.total_size > PASSPORT_PACKAGE_TRANSFER_MAX_BYTES) {
                 notify_text(s_pkg_status_handle, s_pkg_status_subscribed, "设备码不匹配");
                 continue;
             }
@@ -252,7 +253,7 @@ static int advertise(void)
     int rc = ble_gap_adv_set_fields(&fields);
     if (rc != 0) return rc;
 
-    /* The legacy 31-byte advertisement cannot hold flags, the 128-bit service
+    /* A BLE 4.x 31-byte advertisement cannot hold flags, the 128-bit service
      * UUID, and the complete device name together. Keep discovery data in the
      * advertisement for Web Bluetooth filters and move the name to scan response. */
     struct ble_hs_adv_fields response = {0};

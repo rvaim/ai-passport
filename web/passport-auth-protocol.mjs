@@ -28,7 +28,7 @@ function assertText(value, name, maximum, required = false) {
   }
   for (const character of value) {
     const code = character.codePointAt(0);
-    if (code < 0x20 || code === 0x7f || character === '"' || character === "\\") {
+    if (code < 0x20 || code === 0x7f) {
       throw new Error(name + "包含协议不支持的字符");
     }
   }

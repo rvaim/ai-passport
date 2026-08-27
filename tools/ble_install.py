@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Install a .pap package over Passport Link BLE. Requires: pip install bleak"""
+"""Install a .pap package over Passport Link BLE. Requires: pip install bleak."""
 from __future__ import annotations
-import argparse, asyncio, struct, zlib
+import argparse
+import asyncio
+import struct
+import zlib
 from pathlib import Path
 
 SERVICE_UUID = "0100004b-4e49-4c54-524f-505353415031"
@@ -10,10 +13,13 @@ PKG_CTRL_UUID = "01000043-474b-5054-524f-505353415031"
 PKG_DATA_UUID = "01000044-474b-5054-524f-505353415031"
 PKG_STATUS_UUID = "01000053-474b-5054-524f-505353415031"
 ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+MAX_PACKAGE_SIZE = 4 * 1024 * 1024
+PACKAGE_CHUNK_SIZE = 180
+FAILURE_STATUSES = {"设备码不匹配", "无法写入存储", "写入失败", "安装失败"}
 
 
 def parse_code(code: str) -> int:
-    compact = code.replace("-", "").upper()
+    compact = "".join(code.upper().split()).replace("-", "")
     if len(compact) != 11:
         raise ValueError("设备码格式应为 XXXXX-XXXXX-X")
     value = 0
@@ -29,42 +35,83 @@ def parse_code(code: str) -> int:
     return value
 
 
+def normalize_code(code: str) -> str:
+    parse_code(code)
+    compact = "".join(code.upper().split()).replace("-", "")
+    return f"{compact[:5]}-{compact[5:10]}-{compact[10]}"
+
+
+async def wait_for_status(queue: asyncio.Queue[str], expected: str,
+                          timeout: float, timeout_message: str) -> None:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while True:
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            raise RuntimeError(timeout_message)
+        try:
+            status = await asyncio.wait_for(queue.get(), remaining)
+        except TimeoutError as exc:
+            raise RuntimeError(timeout_message) from exc
+        if status in FAILURE_STATUSES:
+            raise RuntimeError(f"设备返回：{status}")
+        if status == expected:
+            return
+
+
 async def install(code: str, package: Path) -> None:
     try:
         from bleak import BleakClient, BleakScanner
     except ImportError as exc:
         raise SystemExit("缺少 bleak，请先执行: pip install bleak") from exc
 
-    device_id = parse_code(code)
-    wanted_name = f"Passport-{code.upper()}"
+    canonical_code = normalize_code(code)
+    device_id = parse_code(canonical_code)
+    wanted_name = f"Passport-{canonical_code}"
     print(f"正在查找 {wanted_name} ...")
-    device = await BleakScanner.find_device_by_filter(lambda d, ad: ad.local_name == wanted_name, timeout=12.0)
+    device = await BleakScanner.find_device_by_filter(
+        lambda _device, advertisement: advertisement.local_name == wanted_name,
+        timeout=12.0)
     if not device:
         raise SystemExit("未找到目标设备，请确认设备码及蓝牙距离")
 
+    if (package.suffix.lower() != ".pap" or not package.is_file() or
+            package.stat().st_size == 0 or package.stat().st_size > MAX_PACKAGE_SIZE):
+        raise RuntimeError("安装文件必须是 1..4194304 字节的 .pap")
     data = package.read_bytes()
     crc = zlib.crc32(data) & 0xFFFFFFFF
-    status_messages: list[str] = []
+    status_queue: asyncio.Queue[str] = asyncio.Queue()
+    loop = asyncio.get_running_loop()
 
     def status_cb(_, value: bytearray) -> None:
-        text = bytes(value).decode("utf-8", errors="replace")
-        status_messages.append(text)
+        text = bytes(value).decode("utf-8", errors="replace").strip()
+        loop.call_soon_threadsafe(status_queue.put_nowait, text)
         print(f"设备: {text}")
 
     async with BleakClient(device) as client:
-        actual_code = (await client.read_gatt_char(CODE_UUID)).decode("utf-8")
-        if actual_code.upper() != code.upper():
+        actual_code = normalize_code(
+            (await client.read_gatt_char(CODE_UUID)).decode("utf-8"))
+        if actual_code != canonical_code:
             raise SystemExit(f"目标复核失败：设备报告 {actual_code}")
         await client.start_notify(PKG_STATUS_UUID, status_cb)
-        begin = struct.pack("<BIIQ", 1, len(data), crc, device_id)
-        await client.write_gatt_char(PKG_CTRL_UUID, begin, response=True)
-        for offset in range(0, len(data), 180):
-            await client.write_gatt_char(PKG_DATA_UUID, data[offset:offset+180], response=False)
-        await client.write_gatt_char(PKG_CTRL_UUID, b"\x02", response=True)
-        await asyncio.sleep(2.0)
-        await client.stop_notify(PKG_STATUS_UUID)
-    if not status_messages:
-        print("传输结束；设备未返回通知，请在插件管理中确认安装结果")
+        try:
+            begin = struct.pack("<BIIQ", 1, len(data), crc, device_id)
+            await client.write_gatt_char(PKG_CTRL_UUID, begin, response=True)
+            await wait_for_status(
+                status_queue, "开始接收", 6.0, "设备没有确认开始接收")
+
+            # Acknowledged writes provide backpressure for the device's bounded
+            # eight-entry queue. Unacknowledged bursts can silently drop chunks.
+            for offset in range(0, len(data), PACKAGE_CHUNK_SIZE):
+                chunk = data[offset:offset + PACKAGE_CHUNK_SIZE]
+                await client.write_gatt_char(PKG_DATA_UUID, chunk, response=True)
+
+            await client.write_gatt_char(PKG_CTRL_UUID, b"\x02", response=True)
+            await wait_for_status(
+                status_queue, "安装成功", 120.0, "等待设备安装结果超时")
+        finally:
+            await client.stop_notify(PKG_STATUS_UUID)
+    print(f"安装完成: {package.name}")
 
 
 def main() -> None:
@@ -72,6 +119,11 @@ def main() -> None:
     p.add_argument("device_code", help="例如 XXXXX-XXXXX-X")
     p.add_argument("package", type=Path)
     args = p.parse_args()
-    asyncio.run(install(args.device_code, args.package.resolve()))
+    try:
+        asyncio.run(install(args.device_code, args.package.resolve()))
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
 
-if __name__ == "__main__": main()
+
+if __name__ == "__main__":
+    main()

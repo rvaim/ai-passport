@@ -10,6 +10,7 @@ usage() {
 
 run_static_checks() {
     local actionlint_bin
+    local cjson_dir
     local test_dir
 
     python3 tools/check_repo.py
@@ -48,9 +49,35 @@ run_static_checks() {
         managed_components/espressif__lua/lua/onelua.c \
         -lm -o "${test_dir}/lua"
     "${test_dir}/lua" tests/test_counter_plugin.lua examples/counter/main.lua
-    "${test_dir}/lua" tests/test_agent_auth_plugin.lua examples/agent-auth-panel/main.lua
+    cjson_dir="${IDF_PATH:-}/components/json/cJSON"
+    if [[ -n "${IDF_PATH:-}" && -f "${cjson_dir}/cJSON.c" ]]; then
+        "${CC:-cc}" -std=c11 -O2 -Wall -Wextra -Werror -DMAKE_LIB \
+            -Imanaged_components/espressif__lua/lua \
+            -Icomponents/passport_core/include \
+            -Icomponents/passport_runtime/src -I"${cjson_dir}" \
+            tests/test_passport_runtime_json.c \
+            components/passport_core/src/passport_text.c \
+            components/passport_runtime/src/passport_runtime_json.c \
+            managed_components/espressif__lua/lua/onelua.c \
+            "${cjson_dir}/cJSON.c" -lm -o "${test_dir}/test_passport_runtime_json"
+        "${test_dir}/test_passport_runtime_json" tests/test_passport_runtime_json.lua
+        "${test_dir}/test_passport_runtime_json" \
+            tests/test_agent_auth_plugin.lua examples/agent-auth-panel/main.lua
+        "${CC:-cc}" -std=c11 -O2 -Wall -Wextra -Werror \
+            -Itests/host_stubs -Icomponents/passport_core/include \
+            -Icomponents/passport_core/src -I"${cjson_dir}" \
+            tests/test_passport_manifest.c \
+            components/passport_core/src/passport_text.c \
+            components/passport_core/src/passport_manifest.c \
+            components/passport_core/src/passport_theme_parser.c \
+            "${cjson_dir}/cJSON.c" -o "${test_dir}/test_passport_manifest"
+        "${test_dir}/test_passport_manifest"
+    else
+        echo "Passport JSON/API, manifest, theme, and Agent plug-in host tests: NOT RUN (activate ESP-IDF 5.5.3)"
+    fi
     node tests/test_web_installer_protocol.mjs
     node tests/test_passport_auth_protocol.mjs
+    python3 tests/test_ble_install.py
     python3 tests/test_generate_ui_font.py
     python3 tests/test_pack_pap.py
     rm -rf "${test_dir}"

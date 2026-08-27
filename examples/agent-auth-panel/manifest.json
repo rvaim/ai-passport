@@ -2,9 +2,8 @@
   "type": "app",
   "id": "com.folotoy.agent-auth",
   "name": "Agent 授权",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "api": 1,
   "runtime": "lua",
-  "entry": "main.lua",
-  "permissions": ["ui"]
+  "entry": "main.lua"
 }

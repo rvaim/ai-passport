@@ -6,7 +6,12 @@
 #include <stdint.h>
 
 #define PASSPORT_PACKAGE_FORMAT_VERSION 1
+#define PASSPORT_SYSTEM_API_VERSION 1U
 #define PASSPORT_PACKAGE_MANIFEST_MAX 4096U
+#define PASSPORT_PACKAGE_PATH_MAX 120U
+#define PASSPORT_PACKAGE_MAX_ENTRIES 64U
+#define PASSPORT_PACKAGE_ENTRY_MAX_BYTES (4U * 1024U * 1024U)
+#define PASSPORT_PACKAGE_TRANSFER_MAX_BYTES (4U * 1024U * 1024U)
 #define PASSPORT_MANIFEST_ID_MAX 48
 #define PASSPORT_MANIFEST_NAME_MAX 48
 #define PASSPORT_MANIFEST_VERSION_MAX 20
@@ -35,7 +40,7 @@ typedef struct {
 /** Validate the portable identifier grammar shared by apps and themes. */
 bool passport_package_id_is_valid(const char *id);
 
-/** Parse and validate one UTF-8 manifest JSON document. */
+/** Parse one exact current-schema UTF-8 manifest JSON document. */
 esp_err_t passport_package_parse_manifest_json(const char *json, size_t len,
                                                passport_package_kind_t expected_kind,
                                                passport_manifest_t *out);

@@ -10,7 +10,6 @@ local feedback = passport.ui.text("上键 +1 · 下键 -1\n中键清零")
 local function refresh(message)
     passport.ui.set_text(value, "当前计数\n" .. tostring(count))
     passport.ui.set_text(feedback, "上键 +1 · 下键 -1\n" .. message)
-    passport.ui.actions("清零", "主页")
 end
 
 local function adjust(delta)
