@@ -142,7 +142,7 @@ The first completed sequence after screen-off can be consumed only to wake the d
 
 Available standard libraries are base, table, string, math, and utf8. `io`, `os`, `debug`, and `package` are unavailable.
 
-Use the system `passport.json` codec rather than bundling a parser. It exposes `decode`, `encode`, `array`, and `null`, bounded to 4096 bytes, 12 nesting levels, and 128 values. Reject application payloads that do not match your own exact schema.
+Use the system `passport.json` codec rather than bundling a parser. It exposes `decode`, `encode`, `array`, and `null`, bounded to 4096 bytes, 12 nesting levels, and 128 values. Lua integers are signed 32-bit values; fractional values use a 32-bit float. Reject application payloads that do not match your own exact schema or numeric bounds.
 
 Use `passport.storage` for private persistent state. Its asynchronous `read`, `write`, `remove`, `list`, and `usage` operations identify the app from the running manifest; never put an app ID in a storage path. A callback receives a numeric `passport.storage.Error` first. Writes are atomic, updates retain data, and uninstall removes it. One operation is limited to 4096 bytes; each app has 16 files, 64 KiB of allocated data, and two outstanding requests. See the [system API](system-api.md) for callback signatures and path rules.
 

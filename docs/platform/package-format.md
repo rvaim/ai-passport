@@ -53,3 +53,8 @@ before its bundle and data are recursively removed. Failure paths restore the
 prior bundle where possible. At boot, an interrupted bundle/theme swap is
 recovered and unpublished staging/incoming files are removed. This is a
 transaction safety mechanism, not a legacy-format compatibility layer.
+
+The system Theme app uses the same storage worker for theme removal. It protects
+the built-in `default` theme and, when removing the active installed theme,
+persists `default` before moving the theme directory to `.trash`. Theme
+uninstall has no effect on an app's private `data` subtree.

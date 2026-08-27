@@ -19,4 +19,6 @@ python3 tools/pack_pap.py examples/themes/neo-brutalism examples/themes/neo-brut
 python3 tools/inspect_pap.py examples/themes/neo-brutalism/dist/neo-brutalism-theme.pap
 ```
 
-通过 Web Bluetooth 安装页或 `tools/ble_install.py` 安装后，打开系统“主题”App 并应用“新粗野主义”。共享 UI 会解析稀疏公共样式覆盖并绘制边框和阴影，不分配位图资源或额外运行时对象。
+通过 Web Bluetooth 安装页或 `tools/ble_install.py` 安装后，打开系统“主题”App，选择“新粗野主义”→“应用主题”。共享 UI 会解析稀疏公共样式覆盖并绘制边框和阴影，不分配位图资源或额外运行时对象。要删除它，请进入主题详情页并选择“卸载主题”；内置默认主题不可删除，如果删除当前主题，系统会先切回默认主题。
+
+所有已安装主题都使用相同的详情流程：短按确定进入详情页，长按确定返回，卸载动作需要再次按确定确认。

@@ -20,11 +20,16 @@
 #define LUA_HEAP_LIMIT (80U * 1024U)
 #define PAP_ROUTE_TITLE_MAX 48U
 
+_Static_assert(sizeof(lua_Integer) == 4U && sizeof(lua_Number) == 4U,
+               "Passport runtime must match the Lua core's 32-bit ABI");
+
 static const char *TAG = "passport_lua";
 
 typedef struct {
     size_t used;
     size_t limit;
+    size_t peak;
+    size_t rejected_size;
 } lua_heap_t;
 
 typedef struct {
@@ -55,11 +60,19 @@ static void *limited_alloc(void *ud, void *ptr, size_t osize, size_t nsize)
     (void)osize;
     lua_heap_t *heap = (lua_heap_t *)ud;
     if (!ptr) {
-        if (nsize == 0U || heap->used + nsize > heap->limit) return NULL;
+        if (nsize == 0U) return NULL;
+        if (nsize > heap->limit - heap->used) {
+            heap->rejected_size = nsize;
+            return NULL;
+        }
         lua_block_t *block = malloc(sizeof(*block) + nsize);
-        if (!block) return NULL;
+        if (!block) {
+            heap->rejected_size = nsize;
+            return NULL;
+        }
         block->size = nsize;
         heap->used += nsize;
+        if (heap->used > heap->peak) heap->peak = heap->used;
         return block + 1;
     }
 
@@ -69,12 +82,20 @@ static void *limited_alloc(void *ud, void *ptr, size_t osize, size_t nsize)
         free(old);
         return NULL;
     }
-    if (heap->used - old->size + nsize > heap->limit) return NULL;
+    size_t retained = heap->used - old->size;
+    if (nsize > heap->limit - retained) {
+        heap->rejected_size = nsize;
+        return NULL;
+    }
     size_t old_size = old->size;
     lua_block_t *next = realloc(old, sizeof(*next) + nsize);
-    if (!next) return NULL;
+    if (!next) {
+        heap->rejected_size = nsize;
+        return NULL;
+    }
     next->size = nsize;
     heap->used = heap->used - old_size + nsize;
+    if (heap->used > heap->peak) heap->peak = heap->used;
     return next + 1;
 }
 
@@ -370,6 +391,20 @@ static void open_safe_libraries(lua_State *L)
     luaL_requiref(L, LUA_UTF8LIBNAME, luaopen_utf8, 1); lua_pop(L, 1);
 }
 
+static int bootstrap_runtime(lua_State *L)
+{
+    open_safe_libraries(L);
+    register_passport_api(L);
+    return 0;
+}
+
+static void discard_failed_runtime_start(void)
+{
+    passport_runtime_storage_stop(&s_rt.storage);
+    lua_close(s_rt.L);
+    memset(&s_rt, 0, sizeof(s_rt));
+}
+
 esp_err_t passport_runtime_start(const passport_app_info_t *app)
 {
     if (!app || s_rt.L) return ESP_ERR_INVALID_STATE;
@@ -384,8 +419,16 @@ esp_err_t passport_runtime_start(const passport_app_info_t *app)
     s_rt.L = lua_newstate(limited_alloc, &s_rt.heap, esp_random());
     if (!s_rt.L) return ESP_ERR_NO_MEM;
     passport_runtime_storage_start(&s_rt.storage, s_rt.L, s_rt.app_id);
-    open_safe_libraries(s_rt.L);
-    register_passport_api(s_rt.L);
+    lua_pushcfunction(s_rt.L, bootstrap_runtime);
+    if (lua_pcall(s_rt.L, 0, 0, 0) != LUA_OK) {
+        log_lua_error(s_rt.L, "运行时初始化失败");
+        ESP_LOGE(TAG, "Lua heap=%u/%u, peak=%u, rejected=%u",
+                 (unsigned)s_rt.heap.used, (unsigned)s_rt.heap.limit,
+                 (unsigned)s_rt.heap.peak, (unsigned)s_rt.heap.rejected_size);
+        esp_err_t err = s_rt.heap.rejected_size ? ESP_ERR_NO_MEM : ESP_FAIL;
+        discard_failed_runtime_start();
+        return err;
+    }
 
     char script[256];
     if (snprintf(script, sizeof(script), "%s/%s", app->root,

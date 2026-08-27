@@ -140,7 +140,7 @@ end)
 
 可用标准库为 base、table、string、math、utf8，不开放 `io`、`os`、`debug`、`package`。
 
-使用系统 `passport.json`，不要携带自有解析器。它提供 `decode`、`encode`、`array`、`null`，限制为 4096 字节、12 层、128 个值。App 仍应对自己的消息执行严格 Schema 校验。
+使用系统 `passport.json`，不要携带自有解析器。它提供 `decode`、`encode`、`array`、`null`，限制为 4096 字节、12 层、128 个值。Lua 整数为有符号 32 位，小数使用 32 位浮点数；App 仍应对自己的消息 Schema 与数值范围做严格校验。
 
 私有持久化状态使用 `passport.storage`。异步 `read`、`write`、`remove`、`list`、`usage` 会从当前运行 Manifest 自动识别 App，路径中不要包含 App ID。回调的第一个参数是数值型 `passport.storage.Error`。写入采用原子替换，更新保留数据，卸载删除数据。单次操作最多 4096 字节；每个 App 最多 16 个文件、64 KiB 实际分配数据和两个未完成请求。回调签名与路径规则见[系统 API](system-api.zh_CN.md)。
 

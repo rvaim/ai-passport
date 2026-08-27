@@ -19,4 +19,6 @@ python3 tools/pack_pap.py examples/themes/neo-brutalism examples/themes/neo-brut
 python3 tools/inspect_pap.py examples/themes/neo-brutalism/dist/neo-brutalism-theme.pap
 ```
 
-Install it through the Web Bluetooth installer or `tools/ble_install.py`, then open the system Theme app and apply `theme.neo-brutalism`. The shared UI resolves its sparse public-style overrides and draws borders and shadows without bitmap assets or extra runtime objects.
+Install it through the Web Bluetooth installer or `tools/ble_install.py`, then open the system Theme app and choose `Neo-Brutalism` → `Apply theme`. The shared UI resolves its sparse public-style overrides and draws borders and shadows without bitmap assets or extra runtime objects. To remove it, open the theme detail page and choose `Uninstall theme`; the built-in default theme cannot be removed, and an active theme is switched to the default before deletion.
+
+The Theme app exposes the same detail flow for every installed theme: short-OK opens the detail page, long-OK returns, and the uninstall action requires a second confirmation press.

@@ -19,7 +19,7 @@ static char s_current_id[PASSPORT_THEME_ID_MAX] = "default";
 static esp_err_t load_theme_file(const char *id, passport_theme_definition_t *out,
                                  char *name, size_t name_cap)
 {
-    if (!passport_package_id_is_valid(id) || !out) return ESP_ERR_INVALID_ARG;
+    if (!passport_package_id_is_valid(id)) return ESP_ERR_INVALID_ARG;
     char path[220];
     int path_len = snprintf(path, sizeof(path), "%s/%s/manifest.json",
                             PASSPORT_THEMES_DIR, id);
@@ -36,8 +36,7 @@ static esp_err_t load_theme_file(const char *id, passport_theme_definition_t *ou
     }
 
     passport_manifest_t manifest;
-    passport_theme_definition_t parsed;
-    err = passport_theme_parse_manifest_json(json, json_len, &manifest, &parsed);
+    err = passport_theme_parse_manifest_json(json, json_len, &manifest, out);
     free(json);
     if (err != ESP_OK || strcmp(manifest.id, id) != 0) return ESP_ERR_INVALID_ARG;
     if (name) {
@@ -45,7 +44,6 @@ static esp_err_t load_theme_file(const char *id, passport_theme_definition_t *ou
         if (name_cap == 0U || name_len >= name_cap) return ESP_ERR_INVALID_SIZE;
         memcpy(name, manifest.name, name_len + 1U);
     }
-    *out = parsed;
     return ESP_OK;
 }
 
@@ -125,9 +123,8 @@ size_t passport_theme_list(passport_theme_info_t *out, size_t capacity)
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL && count < capacity) {
         if (entry->d_name[0] == '.' || !passport_package_id_is_valid(entry->d_name)) continue;
-        passport_theme_definition_t ignored;
         char name[PASSPORT_THEME_NAME_MAX];
-        if (load_theme_file(entry->d_name, &ignored, name, sizeof(name)) == ESP_OK) {
+        if (load_theme_file(entry->d_name, NULL, name, sizeof(name)) == ESP_OK) {
             memcpy(out[count].id, entry->d_name, strlen(entry->d_name) + 1U);
             memcpy(out[count].name, name, strlen(name) + 1U);
             ++count;

@@ -220,17 +220,19 @@ static bool parse_style(const cJSON *object, passport_style_t *out)
 static bool parse_styles(const cJSON *styles, passport_theme_definition_t *out)
 {
     if (!cJSON_IsObject(styles) || !styles->child) return false;
-    passport_theme_definition_t next = {0};
+    if (out) memset(out, 0, sizeof(*out));
     bool seen[PASSPORT_STYLE_COUNT] = {false};
     for (const cJSON *child = styles->child; child; child = child->next) {
         passport_style_id_t id;
+        passport_style_t parsed;
         if (!find_style(child->string, &id) || seen[id] ||
-            !parse_style(child, &next.styles[id])) {
+            !parse_style(child, &parsed)) {
+            if (out) memset(out, 0, sizeof(*out));
             return false;
         }
         seen[id] = true;
+        if (out) out->styles[id] = parsed;
     }
-    *out = next;
     return true;
 }
 
@@ -238,7 +240,7 @@ esp_err_t passport_theme_parse_manifest_json(const char *json, size_t length,
                                              passport_manifest_t *manifest_out,
                                              passport_theme_definition_t *theme_out)
 {
-    if (!json || !manifest_out || !theme_out) return ESP_ERR_INVALID_ARG;
+    if (!json || !manifest_out) return ESP_ERR_INVALID_ARG;
 
     passport_manifest_t manifest;
     cJSON *document = NULL;
@@ -246,12 +248,8 @@ esp_err_t passport_theme_parse_manifest_json(const char *json, size_t length,
         json, length, PASSPORT_PACKAGE_THEME, &manifest, &document);
     if (err != ESP_OK) return err;
     cJSON *styles = cJSON_GetObjectItemCaseSensitive(document, "styles");
-    passport_theme_definition_t next = {0};
-    bool ok = parse_styles(styles, &next);
-    if (ok) {
-        *manifest_out = manifest;
-        *theme_out = next;
-    }
+    bool ok = parse_styles(styles, theme_out);
+    if (ok) *manifest_out = manifest;
     cJSON_Delete(document);
     return ok ? ESP_OK : ESP_ERR_INVALID_ARG;
 }

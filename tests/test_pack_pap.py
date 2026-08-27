@@ -78,6 +78,13 @@ theme = {
 }
 pack_pap.validate_manifest(theme)
 
+for manifest_path in sorted((ROOT / "examples" / "themes").glob("*/manifest.json")):
+    example_manifest = json.loads(
+        manifest_path.read_text(encoding="utf-8"),
+        object_pairs_hook=pack_pap.exact_object,
+    )
+    pack_pap.validate_manifest(example_manifest)
+
 bad = {**theme, "styles": {**theme["styles"], "legacy": {"radius": 4}}}
 expect_value_error(bad)
 bad = {**theme, "styles": {**theme["styles"], "card": {"radius": 33}}}

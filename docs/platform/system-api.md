@@ -44,6 +44,8 @@ Style constants are integers under `passport.ui.Style`:
 
 The platform resolves these through a fixed inheritance graph. Every style ultimately inherits View; component styles then add their semantic layer. A PAP can therefore use `CARD`, `BUTTON`, or `BAR` without copying colors, radii, borders, shadows, or text settings. Changing the active theme changes components on their next render.
 
+The system Theme app lists the built-in `default` theme and installed theme manifests. Its detail page applies or asynchronously uninstalls an installed theme after a second confirmation; `default` cannot be removed, and removing the active theme first persists `default`. Theme management is system-owned and is not exposed as a PAP Lua API.
+
 Additional UI calls:
 
 - `set_text(handle, text)` updates Text, Button, ListItem, or Checkbox text.
@@ -78,7 +80,7 @@ The first completed key sequence after screen-off can be consumed solely to wake
 - `passport.link.send(target_code, message) -> ok, error` sends over the current subscribed BLE connection.
 - `passport.json.decode`, `encode`, `array`, and `null` provide the shared bounded JSON codec.
 
-JSON input/output is limited to 4096 bytes, 12 nesting levels, and 128 values. Strings must be valid UTF-8 without NUL/U+0000. Numbers must be finite, and integers must fit the exact IEEE-754 range of +/-`9007199254740991`.
+JSON input/output is limited to 4096 bytes, 12 nesting levels, and 128 values. Strings must be valid UTF-8 without NUL/U+0000. The device runtime uses Lua's 32-bit numeric ABI: integers must fit `-2147483648..2147483647`, while fractional numbers must remain finite and nonzero when converted to a 32-bit float. Values outside those bounds are rejected instead of being silently truncated, overflowed, or underflowed.
 
 ## Persistent app storage
 

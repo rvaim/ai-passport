@@ -12,8 +12,6 @@
 #define PASSPORT_JSON_MAX_BYTES 4096U
 #define PASSPORT_JSON_MAX_DEPTH 12U
 #define PASSPORT_JSON_MAX_NODES 128U
-#define PASSPORT_JSON_SAFE_INTEGER 9007199254740991.0
-
 static const char s_json_null_marker;
 static const char s_json_array_metatable_key;
 
@@ -82,8 +80,13 @@ static bool input_is_safe(const char *json, size_t length, const char **error)
 static bool number_is_safe(double value)
 {
     double integer_part;
-    return isfinite(value) &&
-           !(modf(value, &integer_part) == 0.0 && fabs(value) > PASSPORT_JSON_SAFE_INTEGER);
+    if (!isfinite(value)) return false;
+    if (modf(value, &integer_part) == 0.0) {
+        return integer_part >= (double)LUA_MININTEGER &&
+               integer_part <= (double)LUA_MAXINTEGER;
+    }
+    lua_Number converted = (lua_Number)value;
+    return isfinite((double)converted) && (value == 0.0 || converted != 0.0f);
 }
 
 static bool cjson_tree_is_safe(const cJSON *item, size_t depth,
@@ -335,8 +338,7 @@ static cJSON *lua_to_cjson(lua_State *L, int index, size_t depth,
     case LUA_TNUMBER:
         if (lua_isinteger(L, index)) {
             lua_Integer value = lua_tointeger(L, index);
-            if ((double)value > PASSPORT_JSON_SAFE_INTEGER ||
-                (double)value < -PASSPORT_JSON_SAFE_INTEGER) {
+            if (!number_is_safe((double)value)) {
                 *error = "Lua 整数超出 JSON 安全范围";
                 return NULL;
             }

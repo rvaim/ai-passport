@@ -44,6 +44,8 @@ end)
 
 平台按固定关系解析样式；所有样式最终都继承 View，再叠加各组件的语义层。PAP 可以直接使用 `CARD`、`BUTTON`、`BAR` 等样式，不需要复制颜色、圆角、边框、阴影或文本设置；主题切换后，组件在下次构建页面时自动使用新主题。
 
+系统“主题”App 会列出内置 `default` 主题和已安装主题 Manifest。主题详情页支持应用或在二次确认后异步卸载已安装主题；`default` 不可删除，删除当前主题前会先持久化 `default`。主题管理由系统负责，不作为 PAP Lua API 暴露。
+
 其他 UI API：
 
 - `set_text(handle, text)` 修改 Text、Button、ListItem 或 Checkbox 的文本。
@@ -78,7 +80,7 @@ end)
 - `passport.link.send(target_code, message) -> ok, error` 通过当前已订阅的 BLE 连接发送消息。
 - `passport.json.decode`、`encode`、`array`、`null` 提供所有 PAP 共用的有界 JSON 编解码器。
 
-JSON 输入/输出上限为 4096 字节、12 层嵌套、128 个值。字符串必须是有效 UTF-8 且不含 NUL/U+0000；数字必须有限，整数必须位于 IEEE-754 可精确表示的 +/-`9007199254740991` 范围内。
+JSON 输入/输出上限为 4096 字节、12 层嵌套、128 个值。字符串必须是有效 UTF-8 且不含 NUL/U+0000。设备运行时使用 Lua 32 位数值 ABI：整数必须位于 `-2147483648..2147483647`，小数转换为 32 位浮点数后必须仍为有限且非零；越界值会被拒绝，不会静默截断、溢出或下溢。
 
 ## App 持久化存储
 

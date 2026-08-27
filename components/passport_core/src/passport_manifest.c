@@ -168,8 +168,7 @@ esp_err_t passport_package_parse_manifest_json(const char *json, size_t len,
                                                passport_manifest_t *out)
 {
     if (header_kind == PASSPORT_PACKAGE_THEME) {
-        passport_theme_definition_t theme;
-        return passport_theme_parse_manifest_json(json, len, out, &theme);
+        return passport_theme_parse_manifest_json(json, len, out, NULL);
     }
     cJSON *document = NULL;
     esp_err_t err = passport_manifest_parse_document(

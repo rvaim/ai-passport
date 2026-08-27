@@ -109,6 +109,8 @@ int main(void)
     assert(passport_package_parse_manifest_json(
                VALID_THEME, strlen(VALID_THEME), PASSPORT_PACKAGE_THEME,
                &manifest) == ESP_OK);
+    assert(passport_theme_parse_manifest_json(
+               VALID_THEME, strlen(VALID_THEME), &manifest, NULL) == ESP_OK);
 
     expect_theme_invalid(THEME_WITH_STYLES("\"card\":{}"));
     expect_theme_invalid(THEME_WITH_STYLES("\"legacy\":{\"radius\":4}"));

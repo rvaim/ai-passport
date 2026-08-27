@@ -25,6 +25,8 @@ assert(succeeds(json.encode({1, 2, 3})) == "[1,2,3]")
 assert(succeeds(json.encode(json.null)) == "null")
 assert(succeeds(json.encode(nil)) == "null")
 assert(succeeds(json.decode("true")) == true)
+assert(succeeds(json.decode("2147483647")) == 2147483647)
+assert(succeeds(json.decode("-2147483648")) == -2147483648)
 
 local max_string = string.rep("x", 4094)
 local max_json = '"' .. max_string .. '"'
@@ -42,6 +44,10 @@ fails(json.decode('{"x":"\\u0000"}'))
 fails(json.decode('{"a":1,"a":2}'))
 fails(json.decode(string.rep(" ", 4097)))
 fails(json.decode('"' .. string.char(0xFF) .. '"'))
+fails(json.decode("2147483648"))
+fails(json.decode("-2147483649"))
+fails(json.decode("1e100"))
+fails(json.decode("1e-100"))
 
 local max_depth_json = "0"
 for _ = 1, 12 do max_depth_json = "[" .. max_depth_json .. "]" end
@@ -63,6 +69,7 @@ fails(json.encode({[true] = 1}))
 fails(json.encode(function() end))
 fails(json.encode(math.huge))
 fails(json.encode(0 / 0))
+fails(json.encode(2147483648))
 fails(json.encode(9007199254740992))
 fails(json.encode("a\0b"))
 fails(json.encode(string.rep("x", 4095)))

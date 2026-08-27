@@ -82,6 +82,11 @@ static bool build_data_path(char *out, size_t capacity, const char *app_id,
                       app_id, relative);
 }
 
+static bool build_theme_path(char *out, size_t capacity, const char *theme_id)
+{
+    return build_path(out, capacity, PASSPORT_THEMES_DIR "/%s", theme_id, NULL);
+}
+
 static passport_app_storage_error_t ensure_data_root(const char *app_id,
                                                      char *root,
                                                      size_t capacity)
@@ -488,26 +493,54 @@ static passport_app_storage_error_t read_usage(
     return PASSPORT_APP_STORAGE_OK;
 }
 
+static passport_app_storage_error_t move_to_trash(const char *target,
+                                                   const char *kind,
+                                                   const char *label,
+                                                   const char *id,
+                                                   uint32_t request_id)
+{
+    char trash[STORAGE_PATH_BUFFER];
+    int length = snprintf(trash, sizeof(trash), PASSPORT_TRASH_DIR "/%s-%s-%08lx",
+                          kind, id, (unsigned long)request_id);
+    if (length <= 0 || (size_t)length >= sizeof(trash)) {
+        return PASSPORT_APP_STORAGE_INVALID_PATH;
+    }
+    if (passport_storage_remove_tree(trash) != ESP_OK) {
+        return PASSPORT_APP_STORAGE_IO_ERROR;
+    }
+    if (rename(target, trash) != 0) return error_from_errno(errno);
+    if (passport_storage_remove_tree(trash) != ESP_OK) {
+        ESP_LOGW(TAG, "%s已卸载，残留目录将在重启时清理: %s", label, trash);
+    }
+    return PASSPORT_APP_STORAGE_OK;
+}
+
 static passport_app_storage_error_t uninstall_app(storage_job_t *job)
 {
     char container[STORAGE_PATH_BUFFER];
-    char trash[STORAGE_PATH_BUFFER];
     if (!build_container_path(container, sizeof(container), job->app_id)) {
         return PASSPORT_APP_STORAGE_INVALID_PATH;
     }
     struct stat st;
     if (stat(container, &st) != 0) return error_from_errno(errno);
-    int length = snprintf(trash, sizeof(trash), PASSPORT_TRASH_DIR "/app-%s-%08lx",
-                          job->app_id, (unsigned long)job->request_id);
-    if (length <= 0 || (size_t)length >= sizeof(trash)) {
+    return move_to_trash(container, "app", "插件", job->app_id, job->request_id);
+}
+
+static passport_app_storage_error_t uninstall_theme(storage_job_t *job)
+{
+    if (strcmp(job->app_id, "default") == 0) {
         return PASSPORT_APP_STORAGE_INVALID_PATH;
     }
-    passport_storage_remove_tree(trash);
-    if (rename(container, trash) != 0) return error_from_errno(errno);
-    if (passport_storage_remove_tree(trash) != ESP_OK) {
-        ESP_LOGW(TAG, "插件已卸载，残留目录将在重启时清理: %s", trash);
+
+    char theme[STORAGE_PATH_BUFFER];
+    if (!build_theme_path(theme, sizeof(theme), job->app_id)) {
+        return PASSPORT_APP_STORAGE_INVALID_PATH;
     }
-    return PASSPORT_APP_STORAGE_OK;
+    struct stat st;
+    if (stat(theme, &st) != 0) return error_from_errno(errno);
+    if (!S_ISDIR(st.st_mode)) return PASSPORT_APP_STORAGE_INVALID_PATH;
+
+    return move_to_trash(theme, "theme", "主题", job->app_id, job->request_id);
 }
 
 static void execute_job(storage_job_t *job,
@@ -535,6 +568,9 @@ static void execute_job(storage_job_t *job,
         break;
     case PASSPORT_APP_STORAGE_UNINSTALL:
         completion->error = uninstall_app(job);
+        break;
+    case PASSPORT_APP_STORAGE_UNINSTALL_THEME:
+        completion->error = uninstall_theme(job);
         break;
     default:
         completion->error = PASSPORT_APP_STORAGE_IO_ERROR;
@@ -589,10 +625,12 @@ static passport_app_storage_error_t submit_job(
     }
     bool allow_empty = operation == PASSPORT_APP_STORAGE_LIST ||
                        operation == PASSPORT_APP_STORAGE_USAGE ||
-                       operation == PASSPORT_APP_STORAGE_UNINSTALL;
+                       operation == PASSPORT_APP_STORAGE_UNINSTALL ||
+                       operation == PASSPORT_APP_STORAGE_UNINSTALL_THEME;
     const char *checked_path = path ? path : "";
     if ((operation != PASSPORT_APP_STORAGE_USAGE &&
          operation != PASSPORT_APP_STORAGE_UNINSTALL &&
+         operation != PASSPORT_APP_STORAGE_UNINSTALL_THEME &&
          !passport_app_storage_path_is_safe(checked_path, allow_empty)) ||
         data_size > PASSPORT_APP_STORAGE_FILE_MAX) {
         return data_size > PASSPORT_APP_STORAGE_FILE_MAX ?
@@ -670,6 +708,17 @@ passport_app_storage_error_t passport_app_storage_uninstall_async(
     passport_app_storage_completion_cb_t callback, void *user)
 {
     return submit_job(PASSPORT_APP_STORAGE_UNINSTALL, app_id, "", NULL, 0,
+                      request_id, callback, user);
+}
+
+passport_app_storage_error_t passport_app_storage_uninstall_theme_async(
+    const char *theme_id, uint32_t request_id,
+    passport_app_storage_completion_cb_t callback, void *user)
+{
+    if (theme_id && strcmp(theme_id, "default") == 0) {
+        return PASSPORT_APP_STORAGE_INVALID_PATH;
+    }
+    return submit_job(PASSPORT_APP_STORAGE_UNINSTALL_THEME, theme_id, "", NULL, 0,
                       request_id, callback, user);
 }
 

@@ -52,7 +52,8 @@ run_static_checks() {
         components/passport_core/src/passport_app_storage_model.c \
         -o "${test_dir}/test_passport_app_storage_model"
     "${test_dir}/test_passport_app_storage_model"
-    "${CC:-cc}" -std=c11 -O2 -Wall -Wextra -Werror -DMAKE_LIB \
+    "${CC:-cc}" -std=c11 -O2 -Wall -Wextra -Werror \
+        -DMAKE_LIB -DLUA_32BITS=1 \
         -Itests/host_stubs -Imanaged_components/espressif__lua/lua \
         -Icomponents/bsp/include -Icomponents/passport_core/include \
         -Icomponents/passport_link/include -Icomponents/passport_runtime/include \
@@ -74,13 +75,10 @@ run_static_checks() {
         tests/test_passport_input_policy.c \
         -o "${test_dir}/test_passport_input_policy"
     "${test_dir}/test_passport_input_policy"
-    "${CC:-cc}" -std=c99 -O2 -DMAKE_LUA \
-        -Imanaged_components/espressif__lua/lua \
-        managed_components/espressif__lua/lua/onelua.c \
-        -lm -o "${test_dir}/lua"
     cjson_dir="${IDF_PATH:-}/components/json/cJSON"
     if [[ -n "${IDF_PATH:-}" && -f "${cjson_dir}/cJSON.c" ]]; then
-        "${CC:-cc}" -std=c11 -O2 -Wall -Wextra -Werror -DMAKE_LIB \
+        "${CC:-cc}" -std=c11 -O2 -Wall -Wextra -Werror \
+            -DMAKE_LIB -DLUA_32BITS=1 \
             -Imanaged_components/espressif__lua/lua \
             -Icomponents/passport_core/include \
             -Icomponents/passport_runtime/src -I"${cjson_dir}" \

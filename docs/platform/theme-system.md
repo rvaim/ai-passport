@@ -81,4 +81,10 @@ Colors are exact `#RRGGBB` strings. Opacities use 0–255.
 
 Native components and PAP components reference the same resolved style objects. The UI layer builds 24 shared LVGL styles per active theme instead of copying full local styles to every object. Composite widgets reuse `INDICATOR` and `KNOB` on their LVGL parts. This keeps the model deterministic and bounded on the no-PSRAM ESP32-C3.
 
-Themes cannot add style classes, alter the inheritance graph, replace fonts, change navigation or key semantics, modify layouts, or run scripts. Keep shadows small because blend cost grows with the affected pixel area. See the [Night](../../examples/themes/night/manifest.json) and [Neo-Brutalism](../../examples/themes/neo-brutalism/README.md) examples.
+Themes cannot add style classes, alter the inheritance graph, replace fonts, change navigation or key semantics, modify layouts, or run scripts. Keep shadows small because blend cost grows with the affected pixel area. See the [Night](../../examples/themes/night/README.md) and [Neo-Brutalism](../../examples/themes/neo-brutalism/README.md) examples.
+
+## Theme lifecycle
+
+Install and update themes through the normal `.pap` package path. The system Theme app lists the built-in default and valid installed manifests. Short-OK opens a theme detail page where the selected theme can be applied or uninstalled; the uninstall action requires a second confirmation press, while long-OK always returns through the system navigator.
+
+Uninstallation runs in the shared storage worker and first moves the theme directory into `.trash` before recursively deleting it. The built-in `default` theme is protected. If the active installed theme is removed, the system applies and persists `default` before queueing the deletion, so a failed cleanup cannot leave the device pointing at a missing theme. Theme removal does not affect PAP app data or the global app-data quota.
