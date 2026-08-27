@@ -359,11 +359,6 @@ esp_err_t passport_link_init(void)
     return ESP_OK;
 }
 
-bool passport_link_connected(void)
-{
-    return s_conn_handle != LINK_CONN_NONE;
-}
-
 void passport_link_set_rx_callback(passport_link_rx_cb_t cb, void *user)
 {
     s_rx_cb = cb;
@@ -379,7 +374,9 @@ void passport_link_set_install_callback(passport_link_install_cb_t cb, void *use
 esp_err_t passport_link_send(uint64_t target_id, const char *service_name, uint8_t type,
                              const void *payload, size_t payload_len)
 {
-    if (!passport_link_connected() || !s_tx_subscribed) return ESP_ERR_INVALID_STATE;
+    if (s_conn_handle == LINK_CONN_NONE || !s_tx_subscribed) {
+        return ESP_ERR_INVALID_STATE;
+    }
     uint8_t frame[PASSPORT_LINK_HEADER_SIZE + PASSPORT_LINK_MAX_PAYLOAD];
     size_t frame_len = 0;
     esp_err_t err = passport_link_frame_encode(type, passport_identity_id(), target_id,

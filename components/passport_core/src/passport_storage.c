@@ -143,9 +143,8 @@ esp_err_t passport_storage_init(void)
         if (!s_fs_mutex) return ESP_ERR_NO_MEM;
     }
 
-    const bool blank_partition = partition_is_blank("appfs");
-    const esp_vfs_fat_mount_config_t cfg = {
-        .format_if_mount_failed = blank_partition,
+    esp_vfs_fat_mount_config_t cfg = {
+        .format_if_mount_failed = false,
         .max_files = 8,
         .allocation_unit_size = CONFIG_WL_SECTOR_SIZE,
         .disk_status_check_enable = false,
@@ -156,11 +155,23 @@ esp_err_t passport_storage_init(void)
         PASSPORT_FS_ROOT, "appfs", &cfg, &mounted_wl);
     if (err != ESP_OK) {
         if (mounted_wl != WL_INVALID_HANDLE) wl_unmount(mounted_wl);
-        ESP_LOGE(TAG, "挂载 appfs 失败: %s", esp_err_to_name(err));
-        return err;
+        mounted_wl = WL_INVALID_HANDLE;
+        if (!partition_is_blank("appfs")) {
+            ESP_LOGE(TAG, "挂载非空 appfs 失败，拒绝格式化: %s",
+                     esp_err_to_name(err));
+            return err;
+        }
+        cfg.format_if_mount_failed = true;
+        err = esp_vfs_fat_spiflash_mount_rw_wl(
+            PASSPORT_FS_ROOT, "appfs", &cfg, &mounted_wl);
+        if (err != ESP_OK) {
+            if (mounted_wl != WL_INVALID_HANDLE) wl_unmount(mounted_wl);
+            ESP_LOGE(TAG, "初始化空白 appfs 失败: %s", esp_err_to_name(err));
+            return err;
+        }
+        ESP_LOGI(TAG, "首次使用，已初始化空白 appfs");
     }
     s_wl = mounted_wl;
-    if (blank_partition) ESP_LOGI(TAG, "首次使用，已初始化空白 appfs");
     if ((err = passport_storage_ensure_dir(PASSPORT_APPS_DIR)) != ESP_OK ||
         (err = passport_storage_ensure_dir(PASSPORT_THEMES_DIR)) != ESP_OK ||
         (err = passport_storage_ensure_dir(PASSPORT_STAGING_DIR)) != ESP_OK ||

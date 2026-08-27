@@ -22,6 +22,7 @@ static const char *TAG = "passport_app_storage";
 
 typedef struct {
     passport_app_storage_operation_t operation;
+    passport_package_kind_t package_kind;
     uint32_t request_id;
     char app_id[PASSPORT_MANIFEST_ID_MAX];
     char path[PASSPORT_APP_STORAGE_PATH_MAX];
@@ -567,10 +568,8 @@ static void execute_job(storage_job_t *job,
         completion->error = read_usage(job, completion);
         break;
     case PASSPORT_APP_STORAGE_UNINSTALL:
-        completion->error = uninstall_app(job);
-        break;
-    case PASSPORT_APP_STORAGE_UNINSTALL_THEME:
-        completion->error = uninstall_theme(job);
+        completion->error = job->package_kind == PASSPORT_PACKAGE_APP ?
+                            uninstall_app(job) : uninstall_theme(job);
         break;
     default:
         completion->error = PASSPORT_APP_STORAGE_IO_ERROR;
@@ -586,6 +585,7 @@ static void storage_worker(void *argument)
     while (xQueueReceive(s_jobs, &job, portMAX_DELAY) == pdTRUE) {
         passport_app_storage_completion_t *completion = job->completion;
         completion->operation = job->operation;
+        completion->package_kind = job->package_kind;
         completion->request_id = job->request_id;
         memcpy(completion->app_id, job->app_id, strlen(job->app_id) + 1U);
         execute_job(job, completion);
@@ -615,7 +615,8 @@ esp_err_t passport_app_storage_init(void)
 }
 
 static passport_app_storage_error_t submit_job(
-    passport_app_storage_operation_t operation, const char *app_id,
+    passport_app_storage_operation_t operation,
+    passport_package_kind_t package_kind, const char *app_id,
     const char *path, const void *data, size_t data_size, uint32_t request_id,
     passport_app_storage_completion_cb_t callback, void *user)
 {
@@ -623,14 +624,11 @@ static passport_app_storage_error_t submit_job(
         request_id == 0U) {
         return PASSPORT_APP_STORAGE_CANCELED;
     }
-    bool allow_empty = operation == PASSPORT_APP_STORAGE_LIST ||
-                       operation == PASSPORT_APP_STORAGE_USAGE ||
-                       operation == PASSPORT_APP_STORAGE_UNINSTALL ||
-                       operation == PASSPORT_APP_STORAGE_UNINSTALL_THEME;
+    const bool has_path = operation >= PASSPORT_APP_STORAGE_READ &&
+                          operation <= PASSPORT_APP_STORAGE_LIST;
+    const bool allow_empty = operation == PASSPORT_APP_STORAGE_LIST;
     const char *checked_path = path ? path : "";
-    if ((operation != PASSPORT_APP_STORAGE_USAGE &&
-         operation != PASSPORT_APP_STORAGE_UNINSTALL &&
-         operation != PASSPORT_APP_STORAGE_UNINSTALL_THEME &&
+    if ((has_path &&
          !passport_app_storage_path_is_safe(checked_path, allow_empty)) ||
         data_size > PASSPORT_APP_STORAGE_FILE_MAX) {
         return data_size > PASSPORT_APP_STORAGE_FILE_MAX ?
@@ -645,6 +643,7 @@ static passport_app_storage_error_t submit_job(
         return PASSPORT_APP_STORAGE_NO_MEMORY;
     }
     job->operation = operation;
+    job->package_kind = package_kind;
     job->request_id = request_id;
     memcpy(job->app_id, app_id, strlen(app_id) + 1U);
     if (checked_path[0]) memcpy(job->path, checked_path, strlen(checked_path) + 1U);
@@ -665,7 +664,8 @@ passport_app_storage_error_t passport_app_storage_read_async(
     const char *app_id, const char *path, uint32_t request_id,
     passport_app_storage_completion_cb_t callback, void *user)
 {
-    return submit_job(PASSPORT_APP_STORAGE_READ, app_id, path, NULL, 0,
+    return submit_job(PASSPORT_APP_STORAGE_READ, PASSPORT_PACKAGE_APP,
+                      app_id, path, NULL, 0,
                       request_id, callback, user);
 }
 
@@ -675,7 +675,8 @@ passport_app_storage_error_t passport_app_storage_write_async(
     void *user)
 {
     if (size && !data) return PASSPORT_APP_STORAGE_IO_ERROR;
-    return submit_job(PASSPORT_APP_STORAGE_WRITE, app_id, path, data, size,
+    return submit_job(PASSPORT_APP_STORAGE_WRITE, PASSPORT_PACKAGE_APP,
+                      app_id, path, data, size,
                       request_id, callback, user);
 }
 
@@ -683,7 +684,8 @@ passport_app_storage_error_t passport_app_storage_remove_async(
     const char *app_id, const char *path, uint32_t request_id,
     passport_app_storage_completion_cb_t callback, void *user)
 {
-    return submit_job(PASSPORT_APP_STORAGE_REMOVE, app_id, path, NULL, 0,
+    return submit_job(PASSPORT_APP_STORAGE_REMOVE, PASSPORT_PACKAGE_APP,
+                      app_id, path, NULL, 0,
                       request_id, callback, user);
 }
 
@@ -691,7 +693,8 @@ passport_app_storage_error_t passport_app_storage_list_async(
     const char *app_id, const char *path, uint32_t request_id,
     passport_app_storage_completion_cb_t callback, void *user)
 {
-    return submit_job(PASSPORT_APP_STORAGE_LIST, app_id, path, NULL, 0,
+    return submit_job(PASSPORT_APP_STORAGE_LIST, PASSPORT_PACKAGE_APP,
+                      app_id, path, NULL, 0,
                       request_id, callback, user);
 }
 
@@ -699,26 +702,22 @@ passport_app_storage_error_t passport_app_storage_usage_async(
     const char *app_id, uint32_t request_id,
     passport_app_storage_completion_cb_t callback, void *user)
 {
-    return submit_job(PASSPORT_APP_STORAGE_USAGE, app_id, "", NULL, 0,
+    return submit_job(PASSPORT_APP_STORAGE_USAGE, PASSPORT_PACKAGE_APP,
+                      app_id, "", NULL, 0,
                       request_id, callback, user);
 }
 
 passport_app_storage_error_t passport_app_storage_uninstall_async(
-    const char *app_id, uint32_t request_id,
+    passport_package_kind_t kind, const char *package_id, uint32_t request_id,
     passport_app_storage_completion_cb_t callback, void *user)
 {
-    return submit_job(PASSPORT_APP_STORAGE_UNINSTALL, app_id, "", NULL, 0,
-                      request_id, callback, user);
-}
-
-passport_app_storage_error_t passport_app_storage_uninstall_theme_async(
-    const char *theme_id, uint32_t request_id,
-    passport_app_storage_completion_cb_t callback, void *user)
-{
-    if (theme_id && strcmp(theme_id, "default") == 0) {
+    if ((kind != PASSPORT_PACKAGE_APP && kind != PASSPORT_PACKAGE_THEME) ||
+        (kind == PASSPORT_PACKAGE_THEME && package_id &&
+         strcmp(package_id, "default") == 0)) {
         return PASSPORT_APP_STORAGE_INVALID_PATH;
     }
-    return submit_job(PASSPORT_APP_STORAGE_UNINSTALL_THEME, theme_id, "", NULL, 0,
+    return submit_job(PASSPORT_APP_STORAGE_UNINSTALL, kind,
+                      package_id, "", NULL, 0,
                       request_id, callback, user);
 }
 

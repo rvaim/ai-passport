@@ -57,22 +57,21 @@ typedef struct {
     } data;
 } system_event_t;
 
+typedef struct {
+    bool armed;
+    bool pending;
+    lv_obj_t *notice;
+} package_uninstall_state_t;
+
 static QueueHandle_t s_events;
 static view_t s_view;
 static passport_navigation_t s_navigation;
 static passport_page_t *s_page;
 static passport_ui_list_t *s_list;
-static size_t s_plugin_detail_index;
-static bool s_plugin_uninstall_armed;
-static bool s_plugin_uninstall_pending;
 static uint32_t s_system_storage_request_id;
-static lv_obj_t *s_plugin_detail_notice;
+static package_uninstall_state_t s_uninstall;
 static passport_theme_info_t s_themes[PASSPORT_MAX_INSTALLED_THEMES];
 static size_t s_theme_count;
-static size_t s_theme_detail_index;
-static bool s_theme_uninstall_armed;
-static bool s_theme_uninstall_pending;
-static lv_obj_t *s_theme_detail_notice;
 static passport_settings_wake_guard_t s_wake_guard;
 
 static void on_storage_completion(
@@ -118,8 +117,7 @@ static void destroy_native_view(void)
         passport_ui_page_destroy(s_page);
         s_page = NULL;
     }
-    s_plugin_detail_notice = NULL;
-    s_theme_detail_notice = NULL;
+    s_uninstall.notice = NULL;
 }
 
 static void show_launcher(void)
@@ -168,19 +166,19 @@ static void show_plugin_detail(size_t app_index)
     const passport_app_info_t *app = passport_app_registry_get(app_index);
     if (!app) return;
     destroy_native_view();
-    s_plugin_detail_index = app_index;
-    s_plugin_uninstall_armed = false;
-    s_plugin_uninstall_pending = false;
+    s_uninstall.armed = false;
+    s_uninstall.pending = false;
     s_page = passport_ui_page_create("插件详情", true, true);
     char line[160];
     snprintf(line, sizeof(line), "%s\n版本：%s\n标识：%s", app->manifest.name,
              app->manifest.version, app->manifest.id);
     passport_ui_label_create(s_page, line);
-    s_plugin_detail_notice = passport_ui_label_create(s_page, "");
+    s_uninstall.notice = passport_ui_label_create(s_page, "");
     s_list = passport_ui_list_create(s_page, 2);
     passport_ui_list_add(s_list, "返回插件列表");
     passport_ui_list_add(s_list, "卸载插件");
-    finish_native_page("打开");
+    passport_ui_page_set_action(s_page, "返回");
+    finish_native_page(NULL);
     s_view = VIEW_PLUGIN_DETAIL;
 }
 
@@ -264,20 +262,19 @@ static void show_themes(void)
     s_view = VIEW_THEMES;
 }
 
-static void refresh_theme_detail_action(void)
+static void refresh_package_detail_action(const char *primary_action)
 {
     if (!s_page || !s_list) return;
     passport_ui_page_set_action(
-        s_page, passport_ui_list_selected(s_list) == 0U ? "应用" : "卸载");
+        s_page, passport_ui_list_selected(s_list) == 0U ? primary_action : "卸载");
 }
 
 static void show_theme_detail(size_t theme_index)
 {
     if (theme_index >= s_theme_count) return;
     destroy_native_view();
-    s_theme_detail_index = theme_index;
-    s_theme_uninstall_armed = false;
-    s_theme_uninstall_pending = false;
+    s_uninstall.armed = false;
+    s_uninstall.pending = false;
     const passport_theme_info_t *theme = &s_themes[theme_index];
     const bool built_in = strcmp(theme->id, "default") == 0;
     s_page = passport_ui_page_create("主题详情", true, true);
@@ -285,11 +282,11 @@ static void show_theme_detail(size_t theme_index)
     snprintf(line, sizeof(line), "%s\n标识：%s\n%s", theme->name, theme->id,
              built_in ? "内置主题，不可卸载" : "已安装主题");
     passport_ui_label_create(s_page, line);
-    s_theme_detail_notice = passport_ui_label_create(s_page, "");
+    s_uninstall.notice = passport_ui_label_create(s_page, "");
     s_list = passport_ui_list_create(s_page, built_in ? 1U : 2U);
     passport_ui_list_add(s_list, "应用主题");
     if (!built_in) passport_ui_list_add(s_list, "卸载主题");
-    refresh_theme_detail_action();
+    refresh_package_detail_action("应用");
     finish_native_page(NULL);
     s_view = VIEW_THEME_DETAIL;
 }
@@ -365,6 +362,41 @@ static void launch_selected_plugin(size_t registry_index)
     native_reset(VIEW_LAUNCHER);
 }
 
+static void arm_package_uninstall(void)
+{
+    s_uninstall.armed = true;
+    passport_ui_page_set_action(s_page, "确认卸载");
+    passport_ui_label_set_text(s_uninstall.notice, "再按一次确定卸载");
+}
+
+static void clear_package_uninstall_confirmation(void)
+{
+    s_uninstall.armed = false;
+    passport_ui_label_set_text(s_uninstall.notice, "");
+}
+
+static bool queue_package_uninstall(passport_package_kind_t kind,
+                                    const char *id,
+                                    const char *progress)
+{
+    ++s_system_storage_request_id;
+    if (s_system_storage_request_id == 0U) ++s_system_storage_request_id;
+    passport_app_storage_error_t error = passport_app_storage_uninstall_async(
+        kind, id, s_system_storage_request_id, on_storage_completion, NULL);
+    if (error != PASSPORT_APP_STORAGE_OK) {
+        ESP_LOGE(TAG, "无法提交%s卸载 %s: %u",
+                 kind == PASSPORT_PACKAGE_APP ? "插件" : "主题",
+                 id, (unsigned)error);
+        passport_ui_label_set_text(s_uninstall.notice, "卸载任务提交失败，请重试");
+        s_uninstall.armed = false;
+        return false;
+    }
+    s_uninstall.pending = true;
+    passport_ui_label_set_text(s_uninstall.notice, progress);
+    passport_ui_page_set_action(s_page, "卸载中");
+    return true;
+}
+
 static void handle_launcher_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
     if (!s_list) return;
@@ -394,15 +426,12 @@ static void handle_plugins_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 static void handle_plugin_detail_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
     if (!s_list) return;
-    if (s_plugin_uninstall_pending) return;
+    if (s_uninstall.pending) return;
     const int delta = passport_input_navigation_delta(btn, ev);
     if (delta != 0) {
         passport_ui_list_move(s_list, delta);
-        if (s_plugin_uninstall_armed) {
-            s_plugin_uninstall_armed = false;
-            passport_ui_label_set_text(s_plugin_detail_notice, "");
-            passport_ui_page_set_action(s_page, "打开");
-        }
+        if (s_uninstall.armed) clear_package_uninstall_confirmation();
+        refresh_package_detail_action("返回");
         return;
     }
     if (btn != BSP_BTN_OK || ev != BSP_BTN_CLICK) return;
@@ -410,30 +439,19 @@ static void handle_plugin_detail_key(bsp_btn_t btn, bsp_btn_ev_t ev)
         native_pop();
         return;
     }
-    const passport_app_info_t *app = passport_app_registry_get(s_plugin_detail_index);
+    const passport_navigation_frame_t *frame =
+        passport_navigation_current(&s_navigation);
+    const passport_app_info_t *app = frame && frame->state >= 0 ?
+        passport_app_registry_get((size_t)frame->state) : NULL;
     if (!app) { native_pop(); return; }
-    if (!s_plugin_uninstall_armed) {
-        s_plugin_uninstall_armed = true;
-        passport_ui_page_set_action(s_page, "确认卸载");
-        passport_ui_label_set_text(s_plugin_detail_notice, "再按一次确定卸载");
+    if (!s_uninstall.armed) {
+        arm_package_uninstall();
         return;
     }
-    char id[PASSPORT_MANIFEST_ID_MAX];
-    snprintf(id, sizeof(id), "%s", app->manifest.id);
-    ++s_system_storage_request_id;
-    if (s_system_storage_request_id == 0U) ++s_system_storage_request_id;
-    passport_app_storage_error_t error = passport_app_storage_uninstall_async(
-        id, s_system_storage_request_id, on_storage_completion, NULL);
-    if (error != PASSPORT_APP_STORAGE_OK) {
-        ESP_LOGE(TAG, "无法提交卸载 %s: %u", id, (unsigned)error);
-        passport_ui_label_set_text(s_plugin_detail_notice, "卸载任务提交失败，请重试");
-        passport_ui_page_set_action(s_page, "重试卸载");
-        s_plugin_uninstall_armed = false;
-        return;
+    if (!queue_package_uninstall(PASSPORT_PACKAGE_APP, app->manifest.id,
+                                 "正在删除插件及其数据…")) {
+        refresh_package_detail_action("返回");
     }
-    s_plugin_uninstall_pending = true;
-    passport_ui_label_set_text(s_plugin_detail_notice, "正在删除插件及其数据…");
-    passport_ui_page_set_action(s_page, "卸载中");
 }
 
 static void handle_themes_key(bsp_btn_t btn, bsp_btn_ev_t ev)
@@ -449,36 +467,33 @@ static void handle_themes_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 
 static void handle_theme_detail_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
-    if (!s_list || s_theme_detail_index >= s_theme_count ||
-        s_theme_uninstall_pending) return;
+    const passport_navigation_frame_t *frame =
+        passport_navigation_current(&s_navigation);
+    if (!s_list || !frame || frame->state < 0 ||
+        (size_t)frame->state >= s_theme_count || s_uninstall.pending) return;
     const int delta = passport_input_navigation_delta(btn, ev);
     if (delta != 0) {
         passport_ui_list_move(s_list, delta);
-        if (s_theme_uninstall_armed) {
-            s_theme_uninstall_armed = false;
-            passport_ui_label_set_text(s_theme_detail_notice, "");
-        }
-        refresh_theme_detail_action();
+        if (s_uninstall.armed) clear_package_uninstall_confirmation();
+        refresh_package_detail_action("应用");
         return;
     }
     if (btn != BSP_BTN_OK || ev != BSP_BTN_CLICK) return;
 
-    const passport_theme_info_t *theme = &s_themes[s_theme_detail_index];
+    const passport_theme_info_t *theme = &s_themes[frame->state];
     const size_t selected = passport_ui_list_selected(s_list);
     if (selected == 0U) {
         if (passport_theme_apply(theme->id) == ESP_OK) {
             passport_ui_theme_refresh();
             native_refresh();
         } else {
-            passport_ui_label_set_text(s_theme_detail_notice, "应用失败，请重试");
+            passport_ui_label_set_text(s_uninstall.notice, "应用失败，请重试");
         }
         return;
     }
     if (selected != 1U || strcmp(theme->id, "default") == 0) return;
-    if (!s_theme_uninstall_armed) {
-        s_theme_uninstall_armed = true;
-        passport_ui_page_set_action(s_page, "确认卸载");
-        passport_ui_label_set_text(s_theme_detail_notice, "再按一次确定卸载");
+    if (!s_uninstall.armed) {
+        arm_package_uninstall();
         return;
     }
 
@@ -486,27 +501,16 @@ static void handle_theme_detail_key(bsp_btn_t btn, bsp_btn_ev_t ev)
     snprintf(id, sizeof(id), "%s", theme->id);
     const bool removing_current = strcmp(id, passport_theme_current_id()) == 0;
     if (removing_current && passport_theme_apply("default") != ESP_OK) {
-        passport_ui_label_set_text(s_theme_detail_notice, "切回默认主题失败，请重试");
-        s_theme_uninstall_armed = false;
-        refresh_theme_detail_action();
+        passport_ui_label_set_text(s_uninstall.notice, "切回默认主题失败，请重试");
+        s_uninstall.armed = false;
+        refresh_package_detail_action("应用");
         return;
     }
     if (removing_current) passport_ui_theme_refresh();
 
-    ++s_system_storage_request_id;
-    if (s_system_storage_request_id == 0U) ++s_system_storage_request_id;
-    passport_app_storage_error_t error = passport_app_storage_uninstall_theme_async(
-        id, s_system_storage_request_id, on_storage_completion, NULL);
-    if (error != PASSPORT_APP_STORAGE_OK) {
-        ESP_LOGE(TAG, "无法提交主题卸载 %s: %u", id, (unsigned)error);
-        passport_ui_label_set_text(s_theme_detail_notice, "卸载任务提交失败，请重试");
-        s_theme_uninstall_armed = false;
-        refresh_theme_detail_action();
-        return;
+    if (!queue_package_uninstall(PASSPORT_PACKAGE_THEME, id, "正在删除主题…")) {
+        refresh_package_detail_action("应用");
     }
-    s_theme_uninstall_pending = true;
-    passport_ui_label_set_text(s_theme_detail_notice, "正在删除主题…");
-    passport_ui_page_set_action(s_page, "卸载中");
 }
 
 static void handle_settings_key(bsp_btn_t btn, bsp_btn_ev_t ev)
@@ -560,7 +564,7 @@ static void handle_key_event(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
     /* 长按确定由导航组件统一消费，不交给 PAP。 */
     if (btn == BSP_BTN_OK && ev == BSP_BTN_LONG) {
-        if (s_plugin_uninstall_pending || s_theme_uninstall_pending) return;
+        if (s_uninstall.pending) return;
         if (s_view == VIEW_LUA_APP && passport_runtime_navigate_back()) return;
         if (s_view != VIEW_LUA_APP && native_pop()) return;
         native_reset(VIEW_LAUNCHER);
@@ -627,48 +631,30 @@ static void handle_storage_completion(
     passport_app_storage_completion_t *completion)
 {
     if (!completion) return;
-    const bool is_app_uninstall =
-        completion->operation == PASSPORT_APP_STORAGE_UNINSTALL;
-    const bool is_theme_uninstall =
-        completion->operation == PASSPORT_APP_STORAGE_UNINSTALL_THEME;
-    if (!is_app_uninstall && !is_theme_uninstall) {
+    if (completion->operation != PASSPORT_APP_STORAGE_UNINSTALL) {
         passport_runtime_handle_storage_completion(completion);
         return;
     }
 
-    if (is_theme_uninstall) {
-        s_theme_uninstall_pending = false;
-        if (completion->error == PASSPORT_APP_STORAGE_OK) {
-            ESP_LOGI(TAG, "卸载主题 %s: 完成", completion->app_id);
-            passport_app_storage_completion_free(completion);
-            if (s_view == VIEW_THEME_DETAIL) native_pop();
-            return;
-        }
-        ESP_LOGE(TAG, "卸载主题 %s 失败: %u", completion->app_id,
-                 (unsigned)completion->error);
-        passport_app_storage_completion_free(completion);
-        s_theme_uninstall_armed = false;
-        if (s_view == VIEW_THEME_DETAIL && s_theme_detail_notice) {
-            passport_ui_label_set_text(s_theme_detail_notice, "卸载失败，请重试");
-            refresh_theme_detail_action();
-        }
-        return;
-    }
-
-    s_plugin_uninstall_pending = false;
+    const bool is_app_uninstall =
+        completion->package_kind == PASSPORT_PACKAGE_APP;
+    const view_t detail_view = is_app_uninstall ? VIEW_PLUGIN_DETAIL :
+                                                 VIEW_THEME_DETAIL;
+    const char *kind_name = is_app_uninstall ? "插件" : "主题";
+    s_uninstall.pending = false;
     if (completion->error == PASSPORT_APP_STORAGE_OK) {
-        ESP_LOGI(TAG, "卸载 %s: 完成", completion->app_id);
+        ESP_LOGI(TAG, "卸载%s %s: 完成", kind_name, completion->app_id);
         passport_app_storage_completion_free(completion);
-        if (s_view == VIEW_PLUGIN_DETAIL) native_pop();
+        if (s_view == detail_view) native_pop();
         return;
     }
-    ESP_LOGE(TAG, "卸载 %s 失败: %u", completion->app_id,
+    ESP_LOGE(TAG, "卸载%s %s 失败: %u", kind_name, completion->app_id,
              (unsigned)completion->error);
     passport_app_storage_completion_free(completion);
-    s_plugin_uninstall_armed = false;
-    if (s_view == VIEW_PLUGIN_DETAIL && s_plugin_detail_notice) {
-        passport_ui_label_set_text(s_plugin_detail_notice, "卸载失败，请重试");
-        passport_ui_page_set_action(s_page, "重试卸载");
+    s_uninstall.armed = false;
+    if (s_view == detail_view && s_uninstall.notice) {
+        passport_ui_label_set_text(s_uninstall.notice, "卸载失败，请重试");
+        refresh_package_detail_action(is_app_uninstall ? "返回" : "应用");
     }
 }
 
@@ -706,20 +692,10 @@ static void system_task(void *arg)
     }
 }
 
-static esp_err_t init_nvs(void)
-{
-    esp_err_t err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        err = nvs_flash_init();
-    }
-    return err;
-}
-
 void app_main(void)
 {
     ESP_LOGI(TAG, "Passport Platform v1 启动");
-    ESP_ERROR_CHECK(init_nvs());
+    ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(passport_identity_init());
     ESP_ERROR_CHECK(bsp_i2c_init());
 

@@ -32,8 +32,6 @@ typedef enum {
     PASSPORT_APP_STORAGE_LIST,
     PASSPORT_APP_STORAGE_USAGE,
     PASSPORT_APP_STORAGE_UNINSTALL,
-    /** System-only operation: atomically remove an installed theme. */
-    PASSPORT_APP_STORAGE_UNINSTALL_THEME,
 } passport_app_storage_operation_t;
 
 typedef struct {
@@ -44,9 +42,10 @@ typedef struct {
 
 typedef struct passport_app_storage_completion {
     passport_app_storage_operation_t operation;
+    passport_package_kind_t package_kind;
     passport_app_storage_error_t error;
     uint32_t request_id;
-    /** Running app ID, or the package ID for a system theme-uninstall completion. */
+    /** Running app ID, or the package ID for a system uninstall completion. */
     char app_id[PASSPORT_MANIFEST_ID_MAX];
     uint8_t *data;
     size_t data_size;
@@ -81,14 +80,9 @@ passport_app_storage_error_t passport_app_storage_usage_async(
     const char *app_id, uint32_t request_id,
     passport_app_storage_completion_cb_t callback, void *user);
 
-/** Queue atomic removal of the app container, including bundle and data. */
+/** Queue atomic removal of an app (including data) or an installed theme. */
 passport_app_storage_error_t passport_app_storage_uninstall_async(
-    const char *app_id, uint32_t request_id,
-    passport_app_storage_completion_cb_t callback, void *user);
-
-/** Queue atomic removal of an installed theme. The built-in default is protected. */
-passport_app_storage_error_t passport_app_storage_uninstall_theme_async(
-    const char *theme_id, uint32_t request_id,
+    passport_package_kind_t kind, const char *package_id, uint32_t request_id,
     passport_app_storage_completion_cb_t callback, void *user);
 
 void passport_app_storage_completion_free(

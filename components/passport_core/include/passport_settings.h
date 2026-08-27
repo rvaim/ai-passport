@@ -50,8 +50,6 @@ bool passport_settings_model_consume_wake(passport_settings_wake_guard_t *guard,
 esp_err_t passport_settings_init(void);
 
 bool passport_settings_get(passport_setting_id_t id, uint16_t *out_value);
-void passport_settings_get_snapshot(passport_settings_snapshot_t *out);
-esp_err_t passport_settings_set(passport_setting_id_t id, uint16_t value);
 esp_err_t passport_settings_cycle(passport_setting_id_t id);
 
 /**

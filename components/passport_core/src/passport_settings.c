@@ -9,8 +9,6 @@
 #include <stdatomic.h>
 
 #define SETTINGS_NAMESPACE "pass_settings"
-#define SETTINGS_SCHEMA_KEY "schema"
-#define SETTINGS_SCHEMA_VERSION 1U
 #define SETTINGS_BRIGHTNESS_KEY "brightness"
 #define SETTINGS_VOLUME_KEY "volume"
 #define SETTINGS_TIMEOUT_KEY "screen_off"
@@ -53,9 +51,8 @@ static passport_settings_snapshot_t current_snapshot(void)
 static esp_err_t persist_to_handle(nvs_handle_t handle,
                                    const passport_settings_snapshot_t *snapshot)
 {
-    esp_err_t err = nvs_set_u8(handle, SETTINGS_SCHEMA_KEY, SETTINGS_SCHEMA_VERSION);
-    if (err == ESP_OK) err = nvs_set_u8(handle, SETTINGS_BRIGHTNESS_KEY,
-                                        snapshot->brightness_percent);
+    esp_err_t err = nvs_set_u8(handle, SETTINGS_BRIGHTNESS_KEY,
+                               snapshot->brightness_percent);
     if (err == ESP_OK) err = nvs_set_u8(handle, SETTINGS_VOLUME_KEY,
                                         snapshot->volume_percent);
     if (err == ESP_OK) err = nvs_set_u16(handle, SETTINGS_TIMEOUT_KEY,
@@ -83,52 +80,30 @@ static void load_snapshot(passport_settings_snapshot_t *snapshot)
 {
     passport_settings_model_defaults(snapshot);
     nvs_handle_t handle;
-    esp_err_t err = nvs_open(SETTINGS_NAMESPACE, NVS_READWRITE, &handle);
+    esp_err_t err = nvs_open(SETTINGS_NAMESPACE, NVS_READONLY, &handle);
+    if (err == ESP_ERR_NVS_NOT_FOUND) return;
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "设置存储不可用，使用默认值: %s", esp_err_to_name(err));
         return;
     }
 
-    uint8_t schema = 0U;
-    bool corrected = nvs_get_u8(handle, SETTINGS_SCHEMA_KEY, &schema) != ESP_OK ||
-                     schema != SETTINGS_SCHEMA_VERSION;
-    if (!corrected) {
-        uint8_t value8;
-        uint16_t value16;
-        if (nvs_get_u8(handle, SETTINGS_BRIGHTNESS_KEY, &value8) == ESP_OK &&
-            passport_settings_model_value_valid(PASSPORT_SETTING_BRIGHTNESS, value8)) {
-            snapshot->brightness_percent = value8;
-        } else {
-            corrected = true;
-        }
-        if (nvs_get_u8(handle, SETTINGS_VOLUME_KEY, &value8) == ESP_OK &&
-            passport_settings_model_value_valid(PASSPORT_SETTING_VOLUME, value8)) {
-            snapshot->volume_percent = value8;
-        } else {
-            corrected = true;
-        }
-        if (nvs_get_u16(handle, SETTINGS_TIMEOUT_KEY, &value16) == ESP_OK &&
-            passport_settings_model_value_valid(PASSPORT_SETTING_SCREEN_TIMEOUT, value16)) {
-            snapshot->screen_timeout_seconds = value16;
-        } else {
-            corrected = true;
-        }
-        if (nvs_get_u8(handle, SETTINGS_KEY_SOUND_KEY, &value8) == ESP_OK &&
-            passport_settings_model_value_valid(PASSPORT_SETTING_KEY_SOUND, value8)) {
-            snapshot->key_sound_enabled = value8 != 0U;
-        } else {
-            corrected = true;
-        }
+    uint8_t value8;
+    uint16_t value16;
+    if (nvs_get_u8(handle, SETTINGS_BRIGHTNESS_KEY, &value8) == ESP_OK &&
+        passport_settings_model_value_valid(PASSPORT_SETTING_BRIGHTNESS, value8)) {
+        snapshot->brightness_percent = value8;
     }
-
-    if (corrected) {
-        passport_settings_snapshot_t defaults;
-        passport_settings_model_defaults(&defaults);
-        *snapshot = defaults;
-        err = persist_to_handle(handle, snapshot);
-        if (err != ESP_OK) {
-            ESP_LOGW(TAG, "默认设置写入失败: %s", esp_err_to_name(err));
-        }
+    if (nvs_get_u8(handle, SETTINGS_VOLUME_KEY, &value8) == ESP_OK &&
+        passport_settings_model_value_valid(PASSPORT_SETTING_VOLUME, value8)) {
+        snapshot->volume_percent = value8;
+    }
+    if (nvs_get_u16(handle, SETTINGS_TIMEOUT_KEY, &value16) == ESP_OK &&
+        passport_settings_model_value_valid(PASSPORT_SETTING_SCREEN_TIMEOUT, value16)) {
+        snapshot->screen_timeout_seconds = value16;
+    }
+    if (nvs_get_u8(handle, SETTINGS_KEY_SOUND_KEY, &value8) == ESP_OK &&
+        passport_settings_model_value_valid(PASSPORT_SETTING_KEY_SOUND, value8)) {
+        snapshot->key_sound_enabled = value8 != 0U;
     }
     nvs_close(handle);
 }
@@ -272,17 +247,7 @@ bool passport_settings_get(passport_setting_id_t id, uint16_t *out_value)
     return true;
 }
 
-void passport_settings_get_snapshot(passport_settings_snapshot_t *out)
-{
-    if (!out) return;
-    if (!s_initialized) {
-        passport_settings_model_defaults(out);
-        return;
-    }
-    *out = current_snapshot();
-}
-
-esp_err_t passport_settings_set(passport_setting_id_t id, uint16_t value)
+static esp_err_t settings_set(passport_setting_id_t id, uint16_t value)
 {
     if (!s_initialized) return ESP_ERR_INVALID_STATE;
     if ((unsigned)id >= PASSPORT_SETTING_COUNT ||
@@ -312,7 +277,7 @@ esp_err_t passport_settings_cycle(passport_setting_id_t id)
 {
     uint16_t current;
     if (!passport_settings_get(id, &current)) return ESP_ERR_INVALID_STATE;
-    return passport_settings_set(id, passport_settings_model_next(id, current));
+    return settings_set(id, passport_settings_model_next(id, current));
 }
 
 bool passport_settings_note_activity(void)
