@@ -9,21 +9,20 @@
     "{\"type\":\"app\",\"id\":\"com.example.test\",\"name\":\"测试\"," \
     "\"version\":\"1.0.0\",\"api\":1,\"runtime\":\"lua\",\"entry\":\"main.lua\"}"
 
-#define VALID_TOKENS \
-    "\"background\":\"#112233\",\"surface\":\"#223344\"," \
-    "\"item_background\":\"#334455\",\"text\":\"#FFFFFF\"," \
-    "\"muted_text\":\"#AABBCC\",\"accent\":\"#3366CC\"," \
-    "\"selection_text\":\"#FFFFFF\",\"divider\":\"#111111\"," \
-    "\"border\":\"#010203\",\"shadow\":\"#000000\"," \
-    "\"spacing\":8,\"radius\":32,\"border_width\":4,\"shadow_width\":12," \
-    "\"shadow_spread\":6,\"shadow_opacity\":255," \
-    "\"shadow_offset_x\":-8,\"shadow_offset_y\":8"
+#define VALID_STYLES \
+    "\"view\":{\"background_color\":\"#112233\",\"text_color\":\"#FFFFFF\"," \
+    "\"opacity\":255,\"gap\":8}," \
+    "\"card\":{\"radius\":32,\"border_width\":4,\"shadow_width\":12," \
+    "\"shadow_offset_x\":-8,\"shadow_offset_y\":8}," \
+    "\"text\":{\"text_align\":\"center\"}," \
+    "\"line\":{\"line_color\":\"#123456\",\"line_width\":8}," \
+    "\"arc\":{\"arc_color\":\"#654321\",\"arc_width\":16}"
 
-#define THEME_WITH_TOKENS(tokens) \
+#define THEME_WITH_STYLES(styles) \
     "{\"type\":\"theme\",\"id\":\"theme.test\",\"name\":\"测试主题\"," \
-    "\"version\":\"1.0.0\",\"api\":1,\"tokens\":{" tokens "}}"
+    "\"version\":\"1.0.0\",\"api\":1,\"styles\":{" styles "}}"
 
-#define VALID_THEME THEME_WITH_TOKENS(VALID_TOKENS)
+#define VALID_THEME THEME_WITH_STYLES(VALID_STYLES)
 
 static void expect_manifest_invalid(const char *json, passport_package_kind_t kind)
 {
@@ -35,9 +34,9 @@ static void expect_manifest_invalid(const char *json, passport_package_kind_t ki
 static void expect_theme_invalid(const char *json)
 {
     passport_manifest_t manifest;
-    passport_theme_tokens_t tokens;
+    passport_theme_definition_t theme;
     assert(passport_theme_parse_manifest_json(
-               json, strlen(json), &manifest, &tokens) == ESP_ERR_INVALID_ARG);
+               json, strlen(json), &manifest, &theme) == ESP_ERR_INVALID_ARG);
 }
 
 int main(void)
@@ -91,40 +90,43 @@ int main(void)
     assert(!passport_package_path_is_safe("../main.lua"));
     assert(!passport_package_path_is_safe("main\\lua"));
 
-    passport_theme_tokens_t tokens;
+    passport_theme_definition_t theme;
     assert(passport_theme_parse_manifest_json(
-               VALID_THEME, strlen(VALID_THEME), &manifest, &tokens) == ESP_OK);
+               VALID_THEME, strlen(VALID_THEME), &manifest, &theme) == ESP_OK);
     assert(strcmp(manifest.id, "theme.test") == 0);
-    assert(tokens.background == 0x112233U);
-    assert(tokens.radius == 32U);
-    assert(tokens.shadow_width == 12U);
-    assert(tokens.shadow_offset_x == -8);
-    assert(tokens.shadow_offset_y == 8);
+    assert(theme.styles[PASSPORT_STYLE_VIEW].background_color == 0x112233U);
+    assert(theme.styles[PASSPORT_STYLE_CARD].radius == 32U);
+    assert(theme.styles[PASSPORT_STYLE_CARD].shadow_width == 12U);
+    assert(theme.styles[PASSPORT_STYLE_CARD].shadow_offset_x == -8);
+    assert(theme.styles[PASSPORT_STYLE_CARD].shadow_offset_y == 8);
+    assert(theme.styles[PASSPORT_STYLE_LINE].line_color == 0x123456U);
+    assert(theme.styles[PASSPORT_STYLE_LINE].line_width == 8U);
+    assert(theme.styles[PASSPORT_STYLE_ARC].arc_color == 0x654321U);
+    assert(theme.styles[PASSPORT_STYLE_ARC].arc_width == 16U);
+    assert((theme.styles[PASSPORT_STYLE_VIEW].present &
+            (UINT64_C(1) << PASSPORT_STYLE_PROP_BACKGROUND_COLOR)) != 0U);
+    assert(theme.styles[PASSPORT_STYLE_SURFACE].present == 0U);
     assert(passport_package_parse_manifest_json(
                VALID_THEME, strlen(VALID_THEME), PASSPORT_PACKAGE_THEME,
                &manifest) == ESP_OK);
 
-    expect_theme_invalid(
-        THEME_WITH_TOKENS(
-            "\"background\":\"#112233\",\"surface\":\"#223344\"," 
-            "\"text\":\"#FFFFFF\",\"muted_text\":\"#AABBCC\"," 
-            "\"accent\":\"#3366CC\",\"divider\":\"#111111\"," 
-            "\"spacing\":8,\"radius\":4"));
-
-    char invalid_color[] = VALID_THEME;
-    char *color = strstr(invalid_color, "#112233");
-    assert(color);
-    *color = '1';
-    expect_theme_invalid(invalid_color);
-
-    char invalid_radius[] = VALID_THEME;
-    char *radius = strstr(invalid_radius, "\"radius\":32");
-    assert(radius);
-    radius[strlen("\"radius\":3")] = '3';
-    expect_theme_invalid(invalid_radius);
-
-    expect_theme_invalid(THEME_WITH_TOKENS(VALID_TOKENS ",\"legacy\":true"));
-    expect_theme_invalid(THEME_WITH_TOKENS(VALID_TOKENS ",\"background\":\"#FFFFFF\""));
+    expect_theme_invalid(THEME_WITH_STYLES("\"card\":{}"));
+    expect_theme_invalid(THEME_WITH_STYLES("\"legacy\":{\"radius\":4}"));
+    expect_theme_invalid(THEME_WITH_STYLES("\"card\":{\"legacy\":true}"));
+    expect_theme_invalid(THEME_WITH_STYLES("\"card\":{\"radius\":33}"));
+    expect_theme_invalid(THEME_WITH_STYLES("\"line\":{\"line_width\":9}"));
+    expect_theme_invalid(THEME_WITH_STYLES("\"arc\":{\"arc_width\":17}"));
+    expect_theme_invalid(THEME_WITH_STYLES("\"view\":{\"background_color\":\"112233\"}"));
+    expect_theme_invalid(THEME_WITH_STYLES("\"view\":{\"background_color\":\"#1\"}"));
+    expect_theme_invalid(THEME_WITH_STYLES("\"text\":{\"text_align\":\"justify\"}"));
+    expect_theme_invalid(THEME_WITH_STYLES(
+        "\"card\":{\"radius\":4,\"radius\":8}"));
+    expect_theme_invalid(THEME_WITH_STYLES(
+        "\"card\":{\"radius\":4},\"card\":{\"radius\":8}"));
+    expect_manifest_invalid(
+        "{\"type\":\"theme\",\"id\":\"theme.test\",\"name\":\"测试\","
+        "\"version\":\"1.0.0\",\"api\":1,\"tokens\":{}}",
+        PASSPORT_PACKAGE_THEME);
 
     puts("Passport manifest and theme parser host tests: PASS");
     return 0;

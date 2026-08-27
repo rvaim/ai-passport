@@ -24,7 +24,7 @@ components/passport_core/     设备码、设置、FAT AppFS、.pap 安装、注
 components/passport_ui/       页面容器、状态栏、内容区、动作提示栏、标准组件
 components/passport_link/     BLE GATT、目标设备码校验、消息与 .pap 接收
 components/passport_runtime/  单前台 Lua VM 与受限 Passport Lua API
-examples/counter/             “计数器”示例插件
+examples/agent-auth-panel/    “Agent 授权面板”示例插件
 examples/themes/night/        “夜间主题”示例
 tools/                        .pap 打包/检查、BLE 安装、验证工具
 web/                          本地 Web Bluetooth .pap 安装器
@@ -40,7 +40,7 @@ docs/platform/                架构、插件/API/协议/包格式/主题/迁移
 | 音频 | `bsp_audio_*` | 音量首次默认 30%；按键音默认关闭；音频 codec 仅在工作任务需要时初始化；当前 Lua API 尚未开放音频 |
 | 电池 | `bsp_battery_*` | 状态栏显示电量；实际精度仍取决于电池 profile |
 | BLE | `passport_link` / Lua `passport.link` | V1 为 NimBLE GATT Peripheral；无系统配对；主动 Central 扫描/连接暂缓 |
-| 插件存储 | FAT wear leveling `appfs` | 约 4.94 MB；`.pap` 流式安装，不整包读入 RAM |
+| 插件存储 | FAT wear leveling `appfs` | 约 5.94 MiB；`.pap` 流式安装，不整包读入 RAM |
 | 字体 | 生成的 Noto Sans SC 14 px / 4 bpp | 覆盖可打印 ASCII、3755 个 GB2312 一级汉字、固件标点和两个 Font Awesome 导航图标；需真机核对清晰度 |
 
 所有板级常量只在 [`components/bsp/include/bsp_pins.h`](../components/bsp/include/bsp_pins.h) 定义。普通插件不能直接访问 LVGL、NimBLE、GPIO、I2C 或 FreeRTOS Task。
@@ -54,13 +54,14 @@ docs/platform/                架构、插件/API/协议/包格式/主题/迁移
 插件使用系统页面容器，例如：
 
 ```lua
-local value = 0
-passport.ui.page("计数器", true, true)
-local label = passport.ui.text("计数：0")
-passport.ui.actions("归零", "主页")
+local label
+passport.navigation.set_root("示例", function()
+    label = passport.ui.text("示例页面", passport.ui.Style.CARD)
+    passport.ui.action("完成")
+end)
 ```
 
-系统负责状态栏、内容区、底部动作提示、统一字体和主题；左侧固定显示上下键图标与“(选择)”，插件只提供中、右两项动作词并处理业务状态。完整示例见 [`examples/counter`](../examples/counter)。
+系统负责状态栏、内容区、底部动作提示、统一导航、字体和继承式公共样式；PAP 只提供短按确定动作词。长按确定在二级页面返回上一页，在根页才回桌面。按键回调使用整数枚举；当前三个键共用 ADC 电阻梯，因此 `passport.input.supports_chords` 为 false。完整 API 示例见[插件开发指南](platform/plugin-development.zh_CN.md)。
 
 ## 文档入口
 

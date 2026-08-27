@@ -19,4 +19,4 @@ python3 tools/pack_pap.py examples/themes/neo-brutalism examples/themes/neo-brut
 python3 tools/inspect_pap.py examples/themes/neo-brutalism/dist/neo-brutalism-theme.pap
 ```
 
-Install it through the Web Bluetooth installer or `tools/ble_install.py`, then open the system Theme app and apply `theme.neo-brutalism`. The shared UI draws the border and shadow directly from bounded theme tokens; no bitmap assets or extra runtime objects are allocated.
+Install it through the Web Bluetooth installer or `tools/ble_install.py`, then open the system Theme app and apply `theme.neo-brutalism`. The shared UI resolves its sparse public-style overrides and draws borders and shadows without bitmap assets or extra runtime objects.

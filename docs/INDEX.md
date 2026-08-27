@@ -33,7 +33,7 @@ Use this page to discover repository documentation. `authoritative` documents de
 | [platform/passport-link.md](platform/passport-link.md) | Public device addressing, Link frames, and BLE install protocol | authoritative |
 | [platform/agent-authorization.md](platform/agent-authorization.md) | Agent authorization panel PAP and compact JSON protocol | authoritative |
 | [platform/package-format.md](platform/package-format.md) | Streaming `.pap` package format | authoritative |
-| [platform/theme-system.md](platform/theme-system.md) | Lightweight inherited theme tokens | authoritative |
+| [platform/theme-system.md](platform/theme-system.md) | Fixed inherited public styles and theme overrides | authoritative |
 | [platform/migration-log.md](platform/migration-log.md) | Removed, retained, added, and cleanup record | authoritative |
 | [platform/build-and-delivery.md](platform/build-and-delivery.md) | Build requirements and verification boundaries | authoritative |
 | [../web/DESIGN.md](../web/DESIGN.md) | Web Bluetooth installer usage, interaction, and protocol limits | authoritative |

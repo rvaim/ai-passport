@@ -19,10 +19,10 @@ entry_count:u32
 
 The header kind and manifest `type` must match. App manifests contain exactly
 `type`, `id`, `name`, `version`, `api`, `runtime`, and `entry`. Theme manifests
-contain exactly `type`, `id`, `name`, `version`, `api`, and `tokens`. API must
+contain exactly `type`, `id`, `name`, `version`, `api`, and `styles`. API must
 be the current version `1`; missing, duplicate, and unknown fields are rejected.
-Themes must also pass the complete [18-token schema](theme-system.md) before
-installation is committed.
+Themes must also pass the bounded sparse [public-style schema](theme-system.md)
+before installation is committed.
 
 ## File entry
 
@@ -44,7 +44,12 @@ Current bounds are a 4096-byte manifest, 64 payload entries, paths shorter than
 120 bytes, and 4 MiB per entry. Passport Link also limits the complete package
 transfer to 4 MiB.
 
-Installation writes `.staging/<id>`, validates every entry and the App entry
-file, then atomically renames the installed directory through a temporary
-backup. Failure paths restore the prior directory where possible; this is a
+Installation writes `.staging/app-<id>` or `.staging/theme-<id>` and validates
+every entry before publishing it. An installed app uses
+`apps/<id>/bundle` for its manifest and payload and `apps/<id>/data` for
+system-managed persistent data. Updating an app swaps only `bundle`, retaining
+`data`; uninstalling atomically moves the complete app container to `.trash`
+before its bundle and data are recursively removed. Failure paths restore the
+prior bundle where possible. At boot, an interrupted bundle/theme swap is
+recovered and unpublished staging/incoming files are removed. This is a
 transaction safety mechanism, not a legacy-format compatibility layer.

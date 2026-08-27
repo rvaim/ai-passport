@@ -19,4 +19,4 @@ python3 tools/pack_pap.py examples/themes/neo-brutalism examples/themes/neo-brut
 python3 tools/inspect_pap.py examples/themes/neo-brutalism/dist/neo-brutalism-theme.pap
 ```
 
-通过 Web Bluetooth 安装页或 `tools/ble_install.py` 安装后，打开系统“主题”App 并应用“新粗野主义”。共享 UI 直接按照有界主题 Token 绘制边框和阴影，不分配位图资源或额外运行时对象。
+通过 Web Bluetooth 安装页或 `tools/ble_install.py` 安装后，打开系统“主题”App 并应用“新粗野主义”。共享 UI 会解析稀疏公共样式覆盖并绘制边框和阴影，不分配位图资源或额外运行时对象。

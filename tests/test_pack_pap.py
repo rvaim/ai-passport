@@ -62,33 +62,41 @@ with tempfile.TemporaryDirectory() as td:
 theme = {
     "type": "theme", "id": "theme.test", "name": "Test theme",
     "version": "1.0.0", "api": 1,
-    "tokens": {
-        "background": "#112233", "surface": "#223344",
-        "item_background": "#445566", "text": "#FFFFFF",
-        "muted_text": "#AABBCC", "accent": "#3366CC",
-        "selection_text": "#FFFFFF", "divider": "#111111",
-        "border": "#010203", "shadow": "#000000",
-        "spacing": 8, "radius": 32, "border_width": 4, "shadow_width": 12,
-        "shadow_spread": 6, "shadow_opacity": 255,
-        "shadow_offset_x": -8, "shadow_offset_y": 8,
+    "styles": {
+        "view": {
+            "background_color": "#112233", "text_color": "#FFFFFF", "gap": 8,
+        },
+        "card": {
+            "radius": 32, "border_width": 4, "shadow_width": 12,
+            "shadow_spread": 6, "shadow_opacity": 255,
+            "shadow_offset_x": -8, "shadow_offset_y": 8,
+        },
+        "text": {"text_align": "center"},
+        "line": {"line_color": "#123456", "line_width": 8},
+        "arc": {"arc_color": "#654321", "arc_width": 16},
     },
 }
 pack_pap.validate_manifest(theme)
 
-bad = {**theme, "tokens": {**theme["tokens"], "shadow_blur": 4}}
+bad = {**theme, "styles": {**theme["styles"], "legacy": {"radius": 4}}}
 expect_value_error(bad)
-bad = {**theme, "tokens": {**theme["tokens"], "radius": 33}}
+bad = {**theme, "styles": {**theme["styles"], "card": {"radius": 33}}}
 expect_value_error(bad)
-bad = {**theme, "tokens": {**theme["tokens"], "border_width": 1.5}}
+bad = {**theme, "styles": {**theme["styles"], "line": {"line_width": 9}}}
 expect_value_error(bad)
-bad = {**theme, "tokens": {**theme["tokens"], "shadow": "black"}}
+bad = {**theme, "styles": {**theme["styles"], "arc": {"arc_width": 17}}}
 expect_value_error(bad)
-bad = {**theme, "tokens": {**theme["tokens"], "background": "112233"}}
+bad = {**theme, "styles": {**theme["styles"], "card": {"border_width": 1.5}}}
 expect_value_error(bad)
-bad = {key: value for key, value in theme.items() if key != "tokens"}
+bad = {**theme, "styles": {**theme["styles"], "view": {"shadow_color": "black"}}}
 expect_value_error(bad)
-bad = {**theme, "tokens": {key: value for key, value in theme["tokens"].items()
-                           if key != "surface"}}
+bad = {**theme, "styles": {**theme["styles"], "view": {"background_color": "112233"}}}
+expect_value_error(bad)
+bad = {**theme, "styles": {**theme["styles"], "text": {"text_align": "justify"}}}
+expect_value_error(bad)
+bad = {**theme, "styles": {**theme["styles"], "card": {}}}
+expect_value_error(bad)
+bad = {key: value for key, value in theme.items() if key != "styles"}
 expect_value_error(bad)
 expect_value_error({**theme, "api": 2})
 expect_value_error({**theme, "api": 1.0})

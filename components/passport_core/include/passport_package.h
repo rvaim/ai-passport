@@ -51,8 +51,8 @@ esp_err_t passport_package_parse_manifest_json(const char *json, size_t len,
  */
 esp_err_t passport_package_install(const char *package_path, passport_package_result_t *out);
 
-/** Remove an installed app or theme by manifest ID. */
-esp_err_t passport_package_uninstall(passport_package_kind_t kind, const char *id);
+/** Recover interrupted install swaps and clear unpublished package files at boot. */
+esp_err_t passport_package_recover_installations(void);
 
 /** Validate the restricted package path grammar used for payload entries. */
 bool passport_package_path_is_safe(const char *path);

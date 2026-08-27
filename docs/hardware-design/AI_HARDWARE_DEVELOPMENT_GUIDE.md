@@ -101,7 +101,9 @@ Do not replace the external resistor with the inaccurate internal pull-up. The B
 
 Calibrate thresholds using multiple boards, charge levels, and reasonable temperatures; leave margin between measured distributions rather than relying only on divider theory.
 
-The button component resolves click multiplicity in a 100 ms window and starts LONG at 800 ms. It emits DOUBLE instead of two CLICK events when the same key is pressed twice inside that window. Native UP/DOWN navigation therefore consumes DOUBLE as an explicit two-row move; this preserves both fast repeated navigation and the distinct event delivered to plug-ins. Native OK actions remain single-click only, while OK LONG is the system Home action.
+This ladder cannot identify simultaneous keys. UP's 0 Ω path dominates every combination; DOWN and OK in parallel are about 687.5 Ω, or about 212 mV, which falls inside the DOWN window. Public key values are bit flags only to reserve a future chord-capable board API; current firmware reports chord support as false and must not expose ambiguous OK+UP/OK+DOWN events.
+
+The button component resolves click multiplicity in a 100 ms window and starts LONG at 800 ms. It emits DOUBLE instead of two CLICK events when the same key is pressed twice inside that window. Native UP/DOWN navigation therefore consumes DOUBLE as an explicit two-row move, while PAPs receive a distinct `DOUBLE_CLICK` enum. Native OK actions remain single-click only. OK LONG is owned by the navigator: it pops a secondary route and opens Home only at a root.
 
 ## 7. Shared I2C
 
@@ -144,7 +146,7 @@ Accurate production SOC requires the cell parameters, CW2017 datasheet/vendor pr
 
 ## 10. Flash, console, and memory
 
-All AI Passport hardware revisions use 8 MB Flash. `sdkconfig.defaults` fixes the image to 8 MB and disables automatic flash-size header rewriting. The current `partitions.csv` keeps 24 KB NVS, 4 KB PHY data, a 3 MB factory application, and uses the remaining ~4.94 MiB as a wear-levelled FAT `appfs` for plug-ins, themes, and staging. V1 has no OTA slot. A detected non-8-MB device is a hardware/material/connection anomaly to investigate, not a reason to lower the project default.
+All AI Passport hardware revisions use 8 MB Flash. `sdkconfig.defaults` fixes the image to 8 MB and disables automatic flash-size header rewriting. The current `partitions.csv` keeps 24 KiB NVS, 4 KiB PHY data, a 2 MiB factory application, and uses the remaining ~5.94 MiB as a wear-levelled FAT `appfs` for plug-ins, themes, staging, and private app data. V1 has no OTA slot. A detected non-8-MB device is a hardware/material/connection anomaly to investigate, not a reason to lower the project default.
 
 The console is USB Serial/JTAG. Do not switch to the UART0 default output without resolving its GPIO21 conflict with the backlight.
 
@@ -154,7 +156,7 @@ Review at least the 24 KB LVGL pool, 9.6 KB LCD DMA buffer, the settings worker'
 
 For reusable hardware capability, add `bsp_<feature>.h` and its implementation, keep constants in `bsp_pins.h`, update component CMake/dependencies, return `esp_err_t`, log actionable pin/address context, and document threading, blocking, ownership, initialization, and failure behavior.
 
-Only system apps should modify `main`; normal user plug-ins use Passport UI and are installed as `.pap`. Reusable platform behavior belongs in `passport_core`, `passport_ui`, `passport_link`, or `passport_runtime`, while board-level hardware remains in the BSP. Stop every UI producer before destroying a page, keep device-visible copy in Simplified Chinese with the shared 14 px / 4 bpp system font, move slow work to workers, lock LVGL outside its task, and preserve the system-level OK-long-press return behavior.
+Only system apps should modify `main`; normal user plug-ins use Passport UI and are installed as `.pap`. Reusable platform behavior belongs in `passport_core`, `passport_ui`, `passport_link`, or `passport_runtime`, while board-level hardware remains in the BSP. Stop every UI producer before destroying a page, keep device-visible copy in Simplified Chinese with the shared 14 px / 4 bpp system font, move slow work to workers, lock LVGL outside its task, and preserve the navigator-owned OK-long-press Back/Home behavior.
 
 ## 12. Development environment
 
@@ -185,7 +187,7 @@ General board acceptance:
 
 - Stable USB Serial/JTAG logs without reboot loops, assertions, watchdogs, or persistent errors.
 - I2C scan sees ES8311 at `0x18` and, when fitted, CW2017 at `0x63`.
-- UP/DOWN wraps menu navigation, fast same-direction double presses move two rows without being dropped, OK click enters, and OK long press returns after about 800 ms.
+- UP/DOWN wraps menu navigation, fast same-direction double presses move two rows without being dropped, and OK click enters. An approximately 800 ms OK hold returns one level on a secondary page and opens Home at a root; the current board must not emit chord events.
 - An optional peripheral failure disables only its page.
 - Repeated navigation and operation do not leak heap, tasks, timers, or objects.
 
@@ -193,7 +195,7 @@ General board acceptance:
 | --- | --- |
 | Pin/I2C | scan, all shared devices, boot straps, USB logs |
 | LCD | color blocks, orientation, clipping, inversion, byte order, backlight levels |
-| ADC/buttons | released and pressed mV, 100 ms click/double resolution, two-row native double navigation, 800 ms long event, and margin across battery levels |
+| ADC/buttons | released and pressed mV, 100 ms click/double resolution, two-row native double navigation, 800 ms Back/Home, no chord events, and margin across battery levels |
 | Settings | 50% first boot, 10% brightness steps, 30% volume preview, 30 s screen-off, consumed wake press, key-sound toggle, and reboot persistence |
 | Codec/I2S | 1 kHz tone, non-zero recording, correct playback speed, format changes, page exit |
 | Battery | plausible SOC/mV, graceful missing-device behavior, intermittent-I2C recovery |

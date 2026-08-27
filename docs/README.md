@@ -24,7 +24,7 @@ components/passport_core/     identity, settings, FAT AppFS, .pap installer, reg
 components/passport_ui/       page container, status bar, content, action-hint bar, widgets
 components/passport_link/     BLE GATT, target-code checks, messages, .pap receive path
 components/passport_runtime/  one bounded Lua VM and the Passport Lua API
-examples/counter/             Chinese counter example plug-in
+examples/agent-auth-panel/    Agent authorization panel plug-in
 examples/themes/night/        lightweight night-theme example
 tools/                        package, inspection, BLE install, and validation tools
 web/                          local Web Bluetooth .pap installer
@@ -40,7 +40,7 @@ docs/platform/                architecture/API/protocol/package/theme/migration 
 | Audio | `bsp_audio_*` | volume defaults to 30%; key sound defaults off; the codec is initialized lazily in a worker and is not exposed to Lua in v1 |
 | Battery | `bsp_battery_*` | shown by the status bar; calibration still depends on the cell/profile |
 | BLE | `passport_link` / Lua `passport.link` | NimBLE GATT Peripheral in v1; no OS pairing; active Central scanning is deferred |
-| Plug-in storage | wear-levelled FAT `appfs` | about 4.94 MB; packages are streamed instead of buffered whole in RAM |
+| Plug-in storage | wear-levelled FAT `appfs` | about 5.94 MiB; packages are streamed instead of buffered whole in RAM |
 | Font | generated Noto Sans SC 14 px / 4 bpp | printable ASCII, 3,755 GB2312 level-one ideographs, firmware punctuation, and two Font Awesome navigation icons; verify legibility on-device |
 
 Board constants remain exclusively in [`components/bsp/include/bsp_pins.h`](../components/bsp/include/bsp_pins.h). Normal plug-ins do not access LVGL, NimBLE, GPIO, I2C, or FreeRTOS tasks directly.
@@ -51,7 +51,7 @@ Board constants remain exclusively in [`components/bsp/include/bsp_pins.h`](../c
 
 The dependency-free [web installer](../web/installer.html) lets desktop Chrome or Edge choose a `.pap`, enter the device pairing code, match its exact BLE advertisement, verify the code again over GATT, and install with live progress. The browser requires one explicit device-authorization confirmation on first use; a previously authorized matching Passport reconnects without the device picker. Serve `web/` from HTTPS or localhost; local instructions and interaction states are documented in [its design note](../web/DESIGN.md).
 
-The system owns the status bar, content rectangle, action-hint bar, font, and theme. The bar fixes UP/DOWN as selection navigation; plug-ins provide the OK and long-OK action nouns. See [`examples/counter`](../examples/counter) for the full example.
+The system owns the status bar, content rectangle, action-hint bar, navigation, font, and inherited public styles. PAPs provide only the short-OK action noun; long-OK pops the current route and exits to the launcher only from the root. Key callbacks use integer enums, and `passport.input.supports_chords` is false because the current buttons share one ADC ladder. See the [plug-in development guide](platform/plugin-development.md) for a complete API example.
 
 ## Documentation
 

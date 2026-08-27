@@ -11,7 +11,7 @@ int main(void)
     size_t encoded_len = 0;
     const uint64_t source = 0x001122334455ULL;
     const uint64_t target = 0x00AABBCCDDEEULL;
-    const uint32_t service = passport_link_service_id("com.folotoy.counter");
+    const uint32_t service = passport_link_service_id("com.folotoy.test-app");
 
     assert(service != 0);
     assert(passport_link_frame_encode(PASSPORT_LINK_TYPE_MESSAGE, source, target,

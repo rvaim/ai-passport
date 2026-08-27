@@ -1,5 +1,7 @@
 idf_component_register(
     SRCS "src/passport_runtime_lua.c"
+         "src/passport_runtime_storage.c"
+         "src/passport_runtime_ui.c"
          "src/passport_runtime_json.c"
     INCLUDE_DIRS "include"
     REQUIRES bsp passport_core passport_link

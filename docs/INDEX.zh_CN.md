@@ -34,7 +34,7 @@
 | [platform/passport-link.zh_CN.md](./platform/passport-link.zh_CN.md) | BLE / Link 协议 | authoritative | 公开设备码、目标校验、消息帧与安装 GATT |
 | [platform/agent-authorization.zh_CN.md](./platform/agent-authorization.zh_CN.md) | Agent 授权面板 | authoritative | PAP 面板、紧凑 JSON 载荷和 Web Demo |
 | [platform/package-format.zh_CN.md](./platform/package-format.zh_CN.md) | `.pap` 包格式 | authoritative | 顺序包、CRC、路径约束和安装事务 |
-| [platform/theme-system.zh_CN.md](./platform/theme-system.zh_CN.md) | 主题系统 | authoritative | 轻量 token 主题与 BLE 安装 |
+| [platform/theme-system.zh_CN.md](./platform/theme-system.zh_CN.md) | 主题系统 | authoritative | 固定继承式公共样式与主题覆盖 |
 | [platform/migration-log.zh_CN.md](./platform/migration-log.zh_CN.md) | 改造记录 | authoritative | 删除、保留、新增和 cleanup 记录 |
 | [platform/build-and-delivery.zh_CN.md](./platform/build-and-delivery.zh_CN.md) | 构建与交付 | authoritative | 固件构建环境、验证边界和禁止伪造产物 |
 | [../web/DESIGN.zh_CN.md](../web/DESIGN.zh_CN.md) | 网页安装器 | authoritative | Web Bluetooth 安装器的使用方式、交互状态和协议边界 |

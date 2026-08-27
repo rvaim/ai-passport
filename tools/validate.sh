@@ -40,6 +40,36 @@ run_static_checks() {
         -o "${test_dir}/test_passport_settings_model"
     "${test_dir}/test_passport_settings_model"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
+        -Icomponents/passport_core/include \
+        tests/test_passport_navigation.c \
+        components/passport_core/src/passport_navigation.c \
+        -o "${test_dir}/test_passport_navigation"
+    "${test_dir}/test_passport_navigation"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
+        -Itests/host_stubs -Icomponents/passport_core/include \
+        -Icomponents/passport_core/src \
+        tests/test_passport_app_storage_model.c \
+        components/passport_core/src/passport_app_storage_model.c \
+        -o "${test_dir}/test_passport_app_storage_model"
+    "${test_dir}/test_passport_app_storage_model"
+    "${CC:-cc}" -std=c11 -O2 -Wall -Wextra -Werror -DMAKE_LIB \
+        -Itests/host_stubs -Imanaged_components/espressif__lua/lua \
+        -Icomponents/bsp/include -Icomponents/passport_core/include \
+        -Icomponents/passport_link/include -Icomponents/passport_runtime/include \
+        -Icomponents/passport_runtime/src \
+        tests/test_passport_runtime_storage.c \
+        components/passport_runtime/src/passport_runtime_storage.c \
+        managed_components/espressif__lua/lua/onelua.c \
+        -lm -o "${test_dir}/test_passport_runtime_storage"
+    "${test_dir}/test_passport_runtime_storage"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
+        -Itests/host_stubs -Icomponents/passport_core/include \
+        -Icomponents/passport_core/src \
+        tests/test_passport_theme_resolver.c \
+        components/passport_core/src/passport_theme_resolver.c \
+        -o "${test_dir}/test_passport_theme_resolver"
+    "${test_dir}/test_passport_theme_resolver"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
         -Itests/host_stubs -Icomponents/bsp/include -Imain \
         tests/test_passport_input_policy.c \
         -o "${test_dir}/test_passport_input_policy"
@@ -48,7 +78,6 @@ run_static_checks() {
         -Imanaged_components/espressif__lua/lua \
         managed_components/espressif__lua/lua/onelua.c \
         -lm -o "${test_dir}/lua"
-    "${test_dir}/lua" tests/test_counter_plugin.lua examples/counter/main.lua
     cjson_dir="${IDF_PATH:-}/components/json/cJSON"
     if [[ -n "${IDF_PATH:-}" && -f "${cjson_dir}/cJSON.c" ]]; then
         "${CC:-cc}" -std=c11 -O2 -Wall -Wextra -Werror -DMAKE_LIB \

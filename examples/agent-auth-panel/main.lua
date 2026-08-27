@@ -9,13 +9,10 @@ local json = assert(passport.json, "固件缺少 passport.json")
 local current_request
 local cached_response
 local selected_index = 1
-
-passport.ui.page("Agent 授权", true, true)
-local source_text = passport.ui.text("")
-local content_text = passport.ui.text("等待 Agent 请求\n请保持本页面打开")
-local options_text = passport.ui.text("")
-local state_text = passport.ui.text("")
-passport.ui.actions("", "主页")
+local source_text
+local content_text
+local options_text
+local state_text
 
 local function is_ascii_id(value, maximum)
     if type(value) ~= "string" or #value == 0 or #value > maximum then return false end
@@ -118,7 +115,7 @@ local function set_idle(status)
     passport.ui.set_text(content_text, "等待 Agent 请求\n请保持本页面打开")
     passport.ui.set_text(options_text, "")
     passport.ui.set_text(state_text, status or "")
-    passport.ui.actions("", "主页")
+    passport.ui.action("")
 end
 
 local function refresh_options()
@@ -150,7 +147,7 @@ local function show_request(request, source_code)
     passport.ui.set_text(content_text, content)
     passport.ui.set_text(state_text, "上下选择 · OK 确定")
     refresh_options()
-    passport.ui.actions("确定", "主页")
+    passport.ui.action("确定")
 end
 
 local function send_status(source_code, rid, status)
@@ -170,7 +167,7 @@ local function confirm_request()
     local ok = passport.link.send(request.source, response)
     if not ok then
         passport.ui.set_text(state_text, "发送失败 · 再按确定重试")
-        passport.ui.actions("重试", "主页")
+        passport.ui.action("重试")
         return
     end
 
@@ -221,18 +218,29 @@ passport.app.on_message(function(message, source_code)
     show_request(request, source_code)
 end)
 
-passport.app.on_key(function(key, event)
+local function handle_key(key, event)
     if not current_request then return end
 
-    if (key == "up" or key == "down") and
-       (event == "click" or event == "double") then
-        local distance = event == "double" and 2 or 1
-        if key == "up" then distance = -distance end
+    if (key == passport.input.Key.UP or key == passport.input.Key.DOWN) and
+       (event == passport.input.KeyEvent.CLICK or
+        event == passport.input.KeyEvent.DOUBLE_CLICK) then
+        local distance = event == passport.input.KeyEvent.DOUBLE_CLICK and 2 or 1
+        if key == passport.input.Key.UP then distance = -distance end
         selected_index = ((selected_index - 1 + distance) % #current_request.options) + 1
         refresh_options()
-    elseif key == "ok" and event == "click" then
+    elseif key == passport.input.Key.OK and event == passport.input.KeyEvent.CLICK then
         confirm_request()
     end
+end
+
+passport.navigation.set_root("Agent 授权", function()
+    source_text = passport.ui.text("", passport.ui.Style.MUTED_TEXT)
+    content_text = passport.ui.text("等待 Agent 请求\n请保持本页面打开",
+                                    passport.ui.Style.CARD)
+    options_text = passport.ui.text("")
+    state_text = passport.ui.text("", passport.ui.Style.ACCENT_TEXT)
+    passport.ui.action("")
+    passport.app.on_key(handle_key)
 end)
 
 function on_stop()

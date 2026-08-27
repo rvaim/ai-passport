@@ -7,53 +7,112 @@
 #include <string.h>
 
 typedef enum {
-    THEME_TOKEN_COLOR,
-    THEME_TOKEN_UINT8,
-    THEME_TOKEN_INT8,
-} theme_token_kind_t;
+    STYLE_VALUE_COLOR,
+    STYLE_VALUE_UINT8,
+    STYLE_VALUE_INT8,
+    STYLE_VALUE_ALIGN,
+} style_value_kind_t;
 
 typedef struct {
     const char *name;
+    uint8_t property;
     uint8_t offset;
     int16_t minimum;
     int16_t maximum;
     uint8_t kind;
-} theme_token_spec_t;
+} style_property_spec_t;
 
-#define COLOR_TOKEN(field) \
-    {#field, offsetof(passport_theme_tokens_t, field), 0, 0, THEME_TOKEN_COLOR}
-#define UINT8_TOKEN(field, minimum, maximum) \
-    {#field, offsetof(passport_theme_tokens_t, field), minimum, maximum, THEME_TOKEN_UINT8}
-#define INT8_TOKEN(field, minimum, maximum) \
-    {#field, offsetof(passport_theme_tokens_t, field), minimum, maximum, THEME_TOKEN_INT8}
+typedef struct {
+    const char *name;
+    passport_style_id_t id;
+} style_name_spec_t;
 
-static const theme_token_spec_t s_token_specs[] = {
-    COLOR_TOKEN(background),
-    COLOR_TOKEN(surface),
-    COLOR_TOKEN(item_background),
-    COLOR_TOKEN(text),
-    COLOR_TOKEN(muted_text),
-    COLOR_TOKEN(accent),
-    COLOR_TOKEN(selection_text),
-    COLOR_TOKEN(divider),
-    COLOR_TOKEN(border),
-    COLOR_TOKEN(shadow),
-    UINT8_TOKEN(spacing, 2, 12),
-    UINT8_TOKEN(radius, 0, 32),
-    UINT8_TOKEN(border_width, 0, 4),
-    UINT8_TOKEN(shadow_width, 0, 12),
-    UINT8_TOKEN(shadow_spread, 0, 6),
-    UINT8_TOKEN(shadow_opacity, 0, 255),
-    INT8_TOKEN(shadow_offset_x, -8, 8),
-    INT8_TOKEN(shadow_offset_y, -8, 8),
+#define COLOR_PROPERTY(name, field, property) \
+    {name, property, offsetof(passport_style_t, field), 0, 0, STYLE_VALUE_COLOR}
+#define UINT8_PROPERTY(name, field, property, minimum, maximum) \
+    {name, property, offsetof(passport_style_t, field), minimum, maximum, STYLE_VALUE_UINT8}
+#define INT8_PROPERTY(name, field, property, minimum, maximum) \
+    {name, property, offsetof(passport_style_t, field), minimum, maximum, STYLE_VALUE_INT8}
+
+static const style_property_spec_t s_property_specs[] = {
+    COLOR_PROPERTY("background_color", background_color,
+                   PASSPORT_STYLE_PROP_BACKGROUND_COLOR),
+    UINT8_PROPERTY("background_opacity", background_opacity,
+                   PASSPORT_STYLE_PROP_BACKGROUND_OPACITY, 0, 255),
+    UINT8_PROPERTY("opacity", opacity, PASSPORT_STYLE_PROP_OPACITY, 0, 255),
+    UINT8_PROPERTY("radius", radius, PASSPORT_STYLE_PROP_RADIUS, 0, 32),
+    COLOR_PROPERTY("border_color", border_color, PASSPORT_STYLE_PROP_BORDER_COLOR),
+    UINT8_PROPERTY("border_width", border_width,
+                   PASSPORT_STYLE_PROP_BORDER_WIDTH, 0, 4),
+    UINT8_PROPERTY("border_opacity", border_opacity,
+                   PASSPORT_STYLE_PROP_BORDER_OPACITY, 0, 255),
+    COLOR_PROPERTY("shadow_color", shadow_color, PASSPORT_STYLE_PROP_SHADOW_COLOR),
+    UINT8_PROPERTY("shadow_width", shadow_width,
+                   PASSPORT_STYLE_PROP_SHADOW_WIDTH, 0, 12),
+    UINT8_PROPERTY("shadow_spread", shadow_spread,
+                   PASSPORT_STYLE_PROP_SHADOW_SPREAD, 0, 6),
+    UINT8_PROPERTY("shadow_opacity", shadow_opacity,
+                   PASSPORT_STYLE_PROP_SHADOW_OPACITY, 0, 255),
+    INT8_PROPERTY("shadow_offset_x", shadow_offset_x,
+                  PASSPORT_STYLE_PROP_SHADOW_OFFSET_X, -8, 8),
+    INT8_PROPERTY("shadow_offset_y", shadow_offset_y,
+                  PASSPORT_STYLE_PROP_SHADOW_OFFSET_Y, -8, 8),
+    UINT8_PROPERTY("padding", padding, PASSPORT_STYLE_PROP_PADDING, 0, 24),
+    UINT8_PROPERTY("gap", gap, PASSPORT_STYLE_PROP_GAP, 0, 24),
+    COLOR_PROPERTY("text_color", text_color, PASSPORT_STYLE_PROP_TEXT_COLOR),
+    UINT8_PROPERTY("text_opacity", text_opacity,
+                   PASSPORT_STYLE_PROP_TEXT_OPACITY, 0, 255),
+    {"text_align", PASSPORT_STYLE_PROP_TEXT_ALIGN,
+     offsetof(passport_style_t, text_align), 0, 0, STYLE_VALUE_ALIGN},
+    INT8_PROPERTY("text_line_spacing", text_line_spacing,
+                  PASSPORT_STYLE_PROP_TEXT_LINE_SPACING, -8, 16),
+    COLOR_PROPERTY("line_color", line_color, PASSPORT_STYLE_PROP_LINE_COLOR),
+    UINT8_PROPERTY("line_opacity", line_opacity,
+                   PASSPORT_STYLE_PROP_LINE_OPACITY, 0, 255),
+    UINT8_PROPERTY("line_width", line_width,
+                   PASSPORT_STYLE_PROP_LINE_WIDTH, 0, 8),
+    COLOR_PROPERTY("arc_color", arc_color, PASSPORT_STYLE_PROP_ARC_COLOR),
+    UINT8_PROPERTY("arc_opacity", arc_opacity,
+                   PASSPORT_STYLE_PROP_ARC_OPACITY, 0, 255),
+    UINT8_PROPERTY("arc_width", arc_width,
+                   PASSPORT_STYLE_PROP_ARC_WIDTH, 0, 16),
 };
 
-#undef COLOR_TOKEN
-#undef UINT8_TOKEN
-#undef INT8_TOKEN
+static const style_name_spec_t s_style_names[] = {
+    {"view", PASSPORT_STYLE_VIEW},
+    {"page", PASSPORT_STYLE_PAGE},
+    {"surface", PASSPORT_STYLE_SURFACE},
+    {"text", PASSPORT_STYLE_TEXT},
+    {"muted_text", PASSPORT_STYLE_MUTED_TEXT},
+    {"accent_text", PASSPORT_STYLE_ACCENT_TEXT},
+    {"card", PASSPORT_STYLE_CARD},
+    {"button", PASSPORT_STYLE_BUTTON},
+    {"button_pressed", PASSPORT_STYLE_BUTTON_PRESSED},
+    {"image", PASSPORT_STYLE_IMAGE},
+    {"list", PASSPORT_STYLE_LIST},
+    {"list_item", PASSPORT_STYLE_LIST_ITEM},
+    {"list_item_selected", PASSPORT_STYLE_LIST_ITEM_SELECTED},
+    {"bar", PASSPORT_STYLE_BAR},
+    {"indicator", PASSPORT_STYLE_INDICATOR},
+    {"arc", PASSPORT_STYLE_ARC},
+    {"slider", PASSPORT_STYLE_SLIDER},
+    {"knob", PASSPORT_STYLE_KNOB},
+    {"switch", PASSPORT_STYLE_SWITCH},
+    {"spinner", PASSPORT_STYLE_SPINNER},
+    {"line", PASSPORT_STYLE_LINE},
+    {"checkbox", PASSPORT_STYLE_CHECKBOX},
+    {"canvas", PASSPORT_STYLE_CANVAS},
+    {"divider", PASSPORT_STYLE_DIVIDER},
+};
 
-_Static_assert(sizeof(passport_theme_tokens_t) <= UINT8_MAX,
-               "theme token offsets must fit in uint8_t");
+#undef COLOR_PROPERTY
+#undef UINT8_PROPERTY
+#undef INT8_PROPERTY
+
+_Static_assert(PASSPORT_STYLE_PROP_COUNT <= 64,
+               "style presence mask must contain every public property");
+_Static_assert(sizeof(passport_style_t) <= UINT8_MAX,
+               "style property offsets must fit in uint8_t");
 
 static int hex_digit(char value)
 {
@@ -63,9 +122,10 @@ static int hex_digit(char value)
     return -1;
 }
 
-static bool parse_color(cJSON *item, uint32_t *out)
+static bool parse_color(const cJSON *item, uint32_t *out)
 {
-    if (!cJSON_IsString(item) || !item->valuestring || item->valuestring[0] != '#') {
+    if (!cJSON_IsString(item) || !item->valuestring ||
+        strlen(item->valuestring) != 7U || item->valuestring[0] != '#') {
         return false;
     }
     uint32_t color = 0;
@@ -79,7 +139,8 @@ static bool parse_color(cJSON *item, uint32_t *out)
     return true;
 }
 
-static bool parse_bounded_integer(cJSON *item, int minimum, int maximum, int *out)
+static bool parse_bounded_integer(const cJSON *item, int minimum, int maximum,
+                                  int *out)
 {
     if (!cJSON_IsNumber(item) || item->valuedouble < minimum ||
         item->valuedouble > maximum || item->valuedouble != (double)item->valueint) {
@@ -89,73 +150,107 @@ static bool parse_bounded_integer(cJSON *item, int minimum, int maximum, int *ou
     return true;
 }
 
-static const theme_token_spec_t *find_token_spec(const char *name)
+static const style_property_spec_t *find_property(const char *name)
 {
     if (!name) return NULL;
-    for (size_t i = 0; i < sizeof(s_token_specs) / sizeof(s_token_specs[0]); ++i) {
-        if (strcmp(name, s_token_specs[i].name) == 0) return &s_token_specs[i];
+    for (size_t i = 0; i < sizeof(s_property_specs) / sizeof(s_property_specs[0]); ++i) {
+        if (strcmp(name, s_property_specs[i].name) == 0) return &s_property_specs[i];
     }
     return NULL;
 }
 
-static bool tokens_have_exact_schema(const cJSON *tokens)
+static bool find_style(const char *name, passport_style_id_t *out)
 {
-    if (!cJSON_IsObject(tokens)) return false;
-    size_t count = 0;
-    for (const cJSON *child = tokens->child; child; child = child->next) {
-        if (!find_token_spec(child->string)) return false;
-        ++count;
+    if (!name || !out) return false;
+    for (size_t i = 0; i < sizeof(s_style_names) / sizeof(s_style_names[0]); ++i) {
+        if (strcmp(name, s_style_names[i].name) == 0) {
+            *out = s_style_names[i].id;
+            return true;
+        }
     }
-    return count == sizeof(s_token_specs) / sizeof(s_token_specs[0]);
+    return false;
 }
 
-static bool parse_tokens(cJSON *tokens, passport_theme_tokens_t *out)
+static bool parse_align(const cJSON *item, uint8_t *out)
 {
-    if (!tokens_have_exact_schema(tokens)) return false;
+    if (!cJSON_IsString(item) || !item->valuestring) return false;
+    if (strcmp(item->valuestring, "left") == 0) *out = PASSPORT_TEXT_ALIGN_LEFT;
+    else if (strcmp(item->valuestring, "center") == 0) *out = PASSPORT_TEXT_ALIGN_CENTER;
+    else if (strcmp(item->valuestring, "right") == 0) *out = PASSPORT_TEXT_ALIGN_RIGHT;
+    else return false;
+    return true;
+}
 
-    for (size_t i = 0; i < sizeof(s_token_specs) / sizeof(s_token_specs[0]); ++i) {
-        const theme_token_spec_t *spec = &s_token_specs[i];
-        cJSON *item = cJSON_GetObjectItemCaseSensitive(tokens, spec->name);
-        uint8_t *destination = (uint8_t *)out + spec->offset;
-        if (spec->kind == THEME_TOKEN_COLOR) {
+static bool parse_style(const cJSON *object, passport_style_t *out)
+{
+    if (!cJSON_IsObject(object) || !object->child) return false;
+    passport_style_t next = {0};
+    for (const cJSON *child = object->child; child; child = child->next) {
+        const style_property_spec_t *spec = find_property(child->string);
+        if (!spec) return false;
+        uint64_t bit = UINT64_C(1) << spec->property;
+        if ((next.present & bit) != 0U) return false;
+
+        uint8_t *destination = (uint8_t *)&next + spec->offset;
+        if (spec->kind == STYLE_VALUE_COLOR) {
             uint32_t value;
-            if (!parse_color(item, &value)) return false;
+            if (!parse_color(child, &value)) return false;
             memcpy(destination, &value, sizeof(value));
-            continue;
+        } else if (spec->kind == STYLE_VALUE_ALIGN) {
+            if (!parse_align(child, destination)) return false;
+        } else {
+            int value;
+            if (!parse_bounded_integer(child, spec->minimum, spec->maximum, &value)) {
+                return false;
+            }
+            if (spec->kind == STYLE_VALUE_INT8) {
+                int8_t converted = (int8_t)value;
+                memcpy(destination, &converted, sizeof(converted));
+            } else {
+                uint8_t converted = (uint8_t)value;
+                memcpy(destination, &converted, sizeof(converted));
+            }
         }
+        next.present |= bit;
+    }
+    *out = next;
+    return true;
+}
 
-        int value;
-        if (!parse_bounded_integer(item, spec->minimum, spec->maximum, &value)) {
+static bool parse_styles(const cJSON *styles, passport_theme_definition_t *out)
+{
+    if (!cJSON_IsObject(styles) || !styles->child) return false;
+    passport_theme_definition_t next = {0};
+    bool seen[PASSPORT_STYLE_COUNT] = {false};
+    for (const cJSON *child = styles->child; child; child = child->next) {
+        passport_style_id_t id;
+        if (!find_style(child->string, &id) || seen[id] ||
+            !parse_style(child, &next.styles[id])) {
             return false;
         }
-        if (spec->kind == THEME_TOKEN_INT8) {
-            int8_t converted = (int8_t)value;
-            memcpy(destination, &converted, sizeof(converted));
-        } else {
-            uint8_t converted = (uint8_t)value;
-            memcpy(destination, &converted, sizeof(converted));
-        }
+        seen[id] = true;
     }
+    *out = next;
     return true;
 }
 
 esp_err_t passport_theme_parse_manifest_json(const char *json, size_t length,
                                              passport_manifest_t *manifest_out,
-                                             passport_theme_tokens_t *tokens_out)
+                                             passport_theme_definition_t *theme_out)
 {
-    if (!json || !manifest_out || !tokens_out) return ESP_ERR_INVALID_ARG;
+    if (!json || !manifest_out || !theme_out) return ESP_ERR_INVALID_ARG;
 
     passport_manifest_t manifest;
     cJSON *document = NULL;
     esp_err_t err = passport_manifest_parse_document(
         json, length, PASSPORT_PACKAGE_THEME, &manifest, &document);
     if (err != ESP_OK) return err;
-    cJSON *tokens = cJSON_GetObjectItemCaseSensitive(document, "tokens");
-    passport_theme_tokens_t next = {0};
-    bool ok = parse_tokens(tokens, &next);
+    cJSON *styles = cJSON_GetObjectItemCaseSensitive(document, "styles");
+    passport_theme_definition_t next = {0};
+    bool ok = parse_styles(styles, &next);
     if (ok) {
         *manifest_out = manifest;
-        *tokens_out = next;
+        *theme_out = next;
     }
     cJSON_Delete(document);
     return ok ? ESP_OK : ESP_ERR_INVALID_ARG;

@@ -35,20 +35,28 @@ static esp_err_t parse_installed_manifest(const char *root, passport_manifest_t 
 static bool build_app_root(char *out, size_t capacity, const char *id)
 {
     if (!passport_package_id_is_valid(id)) return false;
-    const size_t root_len = strlen(PASSPORT_APPS_DIR);
+    const char *prefix = PASSPORT_APPS_DIR "/";
+    const char *suffix = "/" PASSPORT_APP_BUNDLE_NAME;
+    const size_t root_len = strlen(prefix);
     const size_t id_len = strlen(id);
-    if (root_len >= capacity || id_len >= capacity - root_len - 1) return false;
-    memcpy(out, PASSPORT_APPS_DIR, root_len);
-    out[root_len] = '/';
-    memcpy(out + root_len + 1, id, id_len + 1);
+    const size_t suffix_len = strlen(suffix);
+    if (root_len >= capacity || id_len >= capacity - root_len ||
+        suffix_len >= capacity - root_len - id_len) return false;
+    memcpy(out, prefix, root_len);
+    memcpy(out + root_len, id, id_len);
+    memcpy(out + root_len + id_len, suffix, suffix_len + 1U);
     return true;
 }
 
 esp_err_t passport_app_registry_scan(void)
 {
+    if (!passport_storage_lock(UINT32_MAX)) return ESP_ERR_INVALID_STATE;
     s_count = 0;
     DIR *dir = opendir(PASSPORT_APPS_DIR);
-    if (!dir) return ESP_ERR_NOT_FOUND;
+    if (!dir) {
+        passport_storage_unlock();
+        return ESP_ERR_NOT_FOUND;
+    }
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL && s_count < PASSPORT_MAX_INSTALLED_APPS) {
         if (entry->d_name[0] == '.') continue;
@@ -62,6 +70,7 @@ esp_err_t passport_app_registry_scan(void)
         }
     }
     closedir(dir);
+    passport_storage_unlock();
     ESP_LOGI(TAG, "发现 %u 个插件", (unsigned)s_count);
     return ESP_OK;
 }

@@ -4,24 +4,41 @@
   "name": "新粗野主义",
   "version": "1.1.1",
   "api": 1,
-  "tokens": {
-    "background": "#FFD84D",
-    "surface": "#FFF7D6",
-    "item_background": "#FFF7D6",
-    "text": "#111111",
-    "muted_text": "#4A3B00",
-    "accent": "#276FD3",
-    "selection_text": "#FFFFFF",
-    "divider": "#111111",
-    "border": "#111111",
-    "shadow": "#111111",
-    "spacing": 8,
-    "radius": 0,
-    "border_width": 2,
-    "shadow_width": 1,
-    "shadow_spread": 0,
-    "shadow_opacity": 255,
-    "shadow_offset_x": 4,
-    "shadow_offset_y": 4
+  "styles": {
+    "view": {
+      "background_color": "#FFD84D",
+      "text_color": "#111111",
+      "border_color": "#111111",
+      "shadow_color": "#111111",
+      "gap": 8
+    },
+    "surface": {
+      "background_color": "#FFF7D6"
+    },
+    "muted_text": {
+      "text_color": "#4A3B00"
+    },
+    "accent_text": {
+      "text_color": "#276FD3"
+    },
+    "card": {
+      "background_color": "#FFF7D6",
+      "radius": 0,
+      "border_width": 2,
+      "shadow_width": 1,
+      "shadow_spread": 0,
+      "shadow_opacity": 255,
+      "shadow_offset_x": 4,
+      "shadow_offset_y": 4,
+      "padding": 8
+    },
+    "list_item_selected": {
+      "background_color": "#276FD3",
+      "text_color": "#FFFFFF"
+    },
+    "divider": {
+      "border_color": "#111111",
+      "border_width": 2
+    }
   }
 }

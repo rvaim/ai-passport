@@ -143,7 +143,8 @@ LVGL 非线程安全：
 - ADC 衰减为 `ADC_ATTEN_DB_12`，必须与依赖的 button 组件内部配置保持一致。升级组件后要重新核对。
 - ADC 校准句柄创建失败不影响按键事件，但 `bsp_button_read_mv()` 返回 `-1`。
 - 回调来自 button 组件的定时器任务，不能阻塞、录音、播放或直接做重 UI 操作。
-- 事件包括 PRESS、CLICK、DOUBLE、LONG。button 组件使用 100 ms 判断单击/双击，并在按住 800 ms 时发出 LONG。同一按键在窗口内快速按两次时，组件会用一个 DOUBLE 替代两个 CLICK；原生页面因此把 UP/DOWN DOUBLE 明确处理为移动两行，既不会丢失快速连按，也保留插件可消费的独立双击事件。原生 OK 操作只响应 CLICK，OK LONG 由系统全局拦截用于返回桌面。
+- 这组电阻梯不能识别同时按键：UP 的 0 Ω 支路会覆盖任意组合；DOWN 与 OK 并联约为 687.5 Ω，对应约 212 mV，仍落在 DOWN 窗口。公共 Key 数值使用位标志只是为未来可识别组合键的硬件预留；当前固件必须报告不支持组合键，不能暴露含义不确定的 OK+UP/OK+DOWN 事件。
+- 事件包括 PRESS、CLICK、DOUBLE、LONG。button 组件使用 100 ms 判断单击/双击，并在按住 800 ms 时发出 LONG。同一按键在窗口内快速按两次时，组件会用一个 DOUBLE 替代两个 CLICK；原生页面把 UP/DOWN DOUBLE 处理为移动两行，PAP 则收到独立 `DOUBLE_CLICK` 枚举。原生 OK 操作只响应 CLICK；OK LONG 由导航器统一管理，二级页面返回上一页，根页才回桌面。
 
 重标阈值时，在 Button 页逐个长按按键记录稳定电压，采集多块板、不同电量和合理温度范围的数据，再把相邻分布之间留裕量设置为边界。不要只用理论分压值。
 
@@ -203,7 +204,7 @@ SOC 准确度取决于电芯与 profile 的匹配程度。本驱动给出的是�
 
 ## 10. Flash、控制台和资源预算
 
-FoloToy AI Passport 的所有硬件批次均使用 8 MB Flash，`sdkconfig.defaults` 因此固定使用 8 MB Flash 镜像配置，并关闭 `CONFIG_ESPTOOLPY_HEADER_FLASHSIZE_UPDATE`。当前 `partitions.csv` 保留 24 KB NVS、4 KB PHY data、3 MB factory app，并把剩余约 4.94 MiB 作为 wear-levelled FAT `appfs`，用于插件、主题和 staging 安装；V1 不设置 OTA 槽。若实机探测结果不是 8 MB，应先确认硬件/料号/连接异常，不能为了未知板卡降低默认容量。
+FoloToy AI Passport 的所有硬件批次均使用 8 MB Flash，`sdkconfig.defaults` 因此固定使用 8 MB Flash 镜像配置，并关闭 `CONFIG_ESPTOOLPY_HEADER_FLASHSIZE_UPDATE`。当前 `partitions.csv` 保留 24 KiB NVS、4 KiB PHY data、2 MiB factory app，并把剩余约 5.94 MiB 作为 wear-levelled FAT `appfs`，用于插件、主题、staging 安装和 App 私有数据；V1 不设置 OTA 槽。若实机探测结果不是 8 MB，应先确认硬件/料号/连接异常，不能为了未知板卡降低默认容量。
 
 控制台固定为 USB Serial/JTAG，不使用 UART0 默认输出，因为其 TX GPIO21 与背光冲突。任何日志接口修改都必须同时检查引脚占用。
 
@@ -386,7 +387,7 @@ idf.py flash monitor
 
 - USB Serial/JTAG 有稳定启动日志，无重启循环、assert、watchdog 和持续错误。
 - I2C 扫描看到预期的 0x18；装有 CW2017 的板还应看到 0x63。
-- 菜单可用 UP/DOWN 循环导航；同方向快速双击会移动两行且不丢事件；OK 单击进入，按住约 800 ms 返回桌面。
+- 菜单可用 UP/DOWN 循环导航；同方向快速双击会移动两行且不丢事件；OK 单击进入，二级页面按住约 800 ms 返回上一页，根页按住后回桌面；当前板不应产生组合键事件。
 - 某个可选外设故障只禁用对应页面，不影响其他功能。
 - 连续切换页面和反复操作后无堆持续下降、对象悬挂或任务泄漏。
 

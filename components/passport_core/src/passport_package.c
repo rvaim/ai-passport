@@ -1,8 +1,11 @@
 #include "passport_package.h"
 
+#include "passport_app_storage.h"
 #include "passport_crc32.h"
 #include "passport_storage.h"
 #include "esp_log.h"
+#include "esp_vfs_fat.h"
+#include <dirent.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -16,6 +19,7 @@ static const uint8_t PAP_MAGIC[4] = {'P', 'A', 'P', '1'};
 #define PAP_HEADER_SIZE 16U
 #define PAP_ENTRY_HEADER_SIZE 12U
 #define PAP_COPY_CHUNK 512U
+#define PAP_FILESYSTEM_SAFETY_BYTES (128U * 1024U)
 
 static uint16_t read_le16(const uint8_t *p)
 {
@@ -159,12 +163,191 @@ static esp_err_t write_manifest_file(const char *stage_root, const char *json, s
     return ok ? ESP_OK : ESP_FAIL;
 }
 
-static const char *kind_dir(passport_package_kind_t kind)
+static esp_err_t build_install_paths(passport_package_kind_t kind,
+                                     const char *id,
+                                     char *stage, size_t stage_capacity,
+                                     char *final, size_t final_capacity,
+                                     char *backup, size_t backup_capacity,
+                                     char *container, size_t container_capacity)
 {
-    return kind == PASSPORT_PACKAGE_APP ? PASSPORT_APPS_DIR : PASSPORT_THEMES_DIR;
+    char stage_name[PASSPORT_MANIFEST_ID_MAX + sizeof("theme-")];
+    int name_length = snprintf(stage_name, sizeof(stage_name), "%s-%s",
+                               kind == PASSPORT_PACKAGE_APP ? "app" : "theme", id);
+    if (name_length <= 0 || (size_t)name_length >= sizeof(stage_name)) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+    esp_err_t err = join_path(stage, stage_capacity,
+                              PASSPORT_STAGING_DIR, stage_name);
+    if (err != ESP_OK) return err;
+    if (kind == PASSPORT_PACKAGE_THEME) {
+        char backup_name[PASSPORT_MANIFEST_ID_MAX + sizeof(".backup")];
+        int backup_length = snprintf(backup_name, sizeof(backup_name),
+                                     ".%s.backup", id);
+        if (backup_length <= 0 || (size_t)backup_length >= sizeof(backup_name)) {
+            return ESP_ERR_INVALID_SIZE;
+        }
+        if ((err = join_path(final, final_capacity, PASSPORT_THEMES_DIR, id)) != ESP_OK ||
+            (err = join_path(backup, backup_capacity, PASSPORT_THEMES_DIR,
+                             backup_name)) != ESP_OK) {
+            return err;
+        }
+        container[0] = '\0';
+        return ESP_OK;
+    }
+
+    if ((err = join_path(container, container_capacity, PASSPORT_APPS_DIR, id)) != ESP_OK ||
+        (err = join_path(final, final_capacity, container,
+                         PASSPORT_APP_BUNDLE_NAME)) != ESP_OK ||
+        (err = join_path(backup, backup_capacity, container,
+                         ".bundle.backup")) != ESP_OK) {
+        return err;
+    }
+    return ESP_OK;
 }
 
-esp_err_t passport_package_install(const char *package_path, passport_package_result_t *out)
+static esp_err_t recover_install_pair(const char *final, const char *backup)
+{
+    struct stat final_stat;
+    struct stat backup_stat;
+    bool final_exists = stat(final, &final_stat) == 0;
+    if (!final_exists && errno != ENOENT) return ESP_FAIL;
+    bool backup_exists = stat(backup, &backup_stat) == 0;
+    if (!backup_exists && errno != ENOENT) return ESP_FAIL;
+    if (!backup_exists) return ESP_OK;
+    if (!final_exists) return rename(backup, final) == 0 ? ESP_OK : ESP_FAIL;
+    return passport_storage_remove_tree(backup);
+}
+
+static esp_err_t recover_app_installations(void)
+{
+    DIR *apps = opendir(PASSPORT_APPS_DIR);
+    if (!apps) return errno == ENOENT ? ESP_OK : ESP_FAIL;
+    struct dirent *entry;
+    esp_err_t result = ESP_OK;
+    char container[256];
+    char final[256];
+    char backup[256];
+    while ((entry = readdir(apps)) != NULL) {
+        if (entry->d_name[0] == '.' ||
+            !passport_package_id_is_valid(entry->d_name)) {
+            continue;
+        }
+        if (join_path(container, sizeof(container), PASSPORT_APPS_DIR,
+                      entry->d_name) != ESP_OK ||
+            join_path(final, sizeof(final), container,
+                      PASSPORT_APP_BUNDLE_NAME) != ESP_OK ||
+            join_path(backup, sizeof(backup), container,
+                      ".bundle.backup") != ESP_OK ||
+            recover_install_pair(final, backup) != ESP_OK) {
+            result = ESP_FAIL;
+            break;
+        }
+    }
+    closedir(apps);
+    return result;
+}
+
+static bool theme_backup_id(const char *name, char *id, size_t capacity)
+{
+    const char suffix[] = ".backup";
+    size_t name_length = strlen(name);
+    size_t suffix_length = sizeof(suffix) - 1U;
+    if (name_length <= suffix_length + 1U || name[0] != '.' ||
+        strcmp(name + name_length - suffix_length, suffix) != 0) {
+        return false;
+    }
+    size_t id_length = name_length - suffix_length - 1U;
+    if (id_length >= capacity) return false;
+    memcpy(id, name + 1U, id_length);
+    id[id_length] = '\0';
+    return passport_package_id_is_valid(id);
+}
+
+static esp_err_t recover_theme_installations(void)
+{
+    DIR *themes = opendir(PASSPORT_THEMES_DIR);
+    if (!themes) return errno == ENOENT ? ESP_OK : ESP_FAIL;
+    struct dirent *entry;
+    esp_err_t result = ESP_OK;
+    char id[PASSPORT_MANIFEST_ID_MAX];
+    char final[256];
+    char backup[256];
+    while ((entry = readdir(themes)) != NULL) {
+        if (!theme_backup_id(entry->d_name, id, sizeof(id))) continue;
+        if (join_path(final, sizeof(final), PASSPORT_THEMES_DIR, id) != ESP_OK ||
+            join_path(backup, sizeof(backup), PASSPORT_THEMES_DIR,
+                      entry->d_name) != ESP_OK ||
+            recover_install_pair(final, backup) != ESP_OK) {
+            result = ESP_FAIL;
+            break;
+        }
+    }
+    closedir(themes);
+    return result;
+}
+
+static uint64_t allocated_file_bytes(uint64_t size)
+{
+    const uint64_t cluster = 4096U;
+    return size == 0U ? 0U : ((size + cluster - 1U) / cluster) * cluster;
+}
+
+static esp_err_t tree_allocated_bytes(const char *path, uint64_t *out)
+{
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        if (errno == ENOENT) return ESP_OK;
+        return ESP_FAIL;
+    }
+    if (!S_ISDIR(st.st_mode)) {
+        if (S_ISREG(st.st_mode) && st.st_size > 0) {
+            *out += allocated_file_bytes((uint64_t)st.st_size);
+        }
+        return ESP_OK;
+    }
+    DIR *directory = opendir(path);
+    if (!directory) return ESP_FAIL;
+    struct dirent *entry;
+    char child[256];
+    esp_err_t result = ESP_OK;
+    while ((entry = readdir(directory)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+        int length = snprintf(child, sizeof(child), "%s/%s", path, entry->d_name);
+        if (length <= 0 || (size_t)length >= sizeof(child) ||
+            tree_allocated_bytes(child, out) != ESP_OK) {
+            result = ESP_FAIL;
+            break;
+        }
+    }
+    closedir(directory);
+    return result;
+}
+
+static bool installation_preserves_data_capacity(const char *package_path,
+                                                 const char *old_bundle)
+{
+    uint64_t projected_free = 0U;
+    if (esp_vfs_fat_info(PASSPORT_FS_ROOT, NULL, &projected_free) != ESP_OK) {
+        return false;
+    }
+    uint64_t released = 0U;
+    if (tree_allocated_bytes(old_bundle, &released) != ESP_OK) return false;
+    if (strcmp(package_path, PASSPORT_INCOMING_PACKAGE) == 0) {
+        struct stat package_stat;
+        if (stat(package_path, &package_stat) == 0 && package_stat.st_size > 0) {
+            released += allocated_file_bytes((uint64_t)package_stat.st_size);
+        }
+    }
+    uint32_t data_used = 0U;
+    if (passport_app_storage_total_usage(&data_used) != ESP_OK) return false;
+    uint64_t data_remaining = data_used >= PASSPORT_APP_STORAGE_GLOBAL_QUOTA_BYTES ? 0U :
+        PASSPORT_APP_STORAGE_GLOBAL_QUOTA_BYTES - data_used;
+    return projected_free + released >=
+           data_remaining + PAP_FILESYSTEM_SAFETY_BYTES;
+}
+
+static esp_err_t package_install_locked(const char *package_path,
+                                        passport_package_result_t *out)
 {
     if (!package_path) return ESP_ERR_INVALID_ARG;
     FILE *f = fopen(package_path, "rb");
@@ -181,23 +364,18 @@ esp_err_t passport_package_install(const char *package_path, passport_package_re
         return err;
     }
 
-    char stage[256], final[256], backup[256];
-    char backup_name[PASSPORT_MANIFEST_ID_MAX + sizeof(".backup")];
-    size_t id_len = strlen(manifest.id);
-    backup_name[0] = '.';
-    memcpy(backup_name + 1, manifest.id, id_len);
-    memcpy(backup_name + 1 + id_len, ".backup", sizeof(".backup"));
-    err = join_path(stage, sizeof(stage), PASSPORT_STAGING_DIR, manifest.id);
-    if (err == ESP_OK) err = join_path(final, sizeof(final), kind_dir(kind), manifest.id);
-    if (err == ESP_OK) err = join_path(backup, sizeof(backup), kind_dir(kind), backup_name);
+    char stage[256], final[256], backup[256], container[256];
+    err = build_install_paths(kind, manifest.id,
+                              stage, sizeof(stage), final, sizeof(final),
+                              backup, sizeof(backup), container, sizeof(container));
     if (err != ESP_OK) {
         free(manifest_json);
         fclose(f);
         return err;
     }
-    passport_storage_remove_tree(stage);
-    passport_storage_remove_tree(backup);
-    if (mkdir(stage, 0755) != 0) err = ESP_FAIL;
+    err = passport_storage_remove_tree(stage);
+    if (err == ESP_OK) err = recover_install_pair(final, backup);
+    if (err == ESP_OK && mkdir(stage, 0755) != 0) err = ESP_FAIL;
     if (err == ESP_OK) err = write_manifest_file(stage, manifest_json, manifest_len);
 
     uint32_t payload_bytes = 0;
@@ -225,15 +403,37 @@ esp_err_t passport_package_install(const char *package_path, passport_package_re
         return err;
     }
 
+    if (!installation_preserves_data_capacity(package_path, final)) {
+        passport_storage_remove_tree(stage);
+        return ESP_ERR_NO_MEM;
+    }
+
+    bool created_container = false;
+    if (kind == PASSPORT_PACKAGE_APP) {
+        struct stat container_st;
+        if (stat(container, &container_st) != 0) {
+            if (errno != ENOENT || mkdir(container, 0755) != 0) {
+                passport_storage_remove_tree(stage);
+                return ESP_FAIL;
+            }
+            created_container = true;
+        } else if (!S_ISDIR(container_st.st_mode)) {
+            passport_storage_remove_tree(stage);
+            return ESP_ERR_INVALID_STATE;
+        }
+    }
+
     struct stat old_st;
     bool had_old = stat(final, &old_st) == 0;
     if (had_old && rename(final, backup) != 0) {
         passport_storage_remove_tree(stage);
+        if (created_container) passport_storage_remove_tree(container);
         return ESP_FAIL;
     }
     if (rename(stage, final) != 0) {
         if (had_old) rename(backup, final);
         passport_storage_remove_tree(stage);
+        if (created_container) passport_storage_remove_tree(container);
         return ESP_FAIL;
     }
     if (had_old) passport_storage_remove_tree(backup);
@@ -249,12 +449,30 @@ esp_err_t passport_package_install(const char *package_path, passport_package_re
     return ESP_OK;
 }
 
-esp_err_t passport_package_uninstall(passport_package_kind_t kind, const char *id)
+esp_err_t passport_package_install(const char *package_path,
+                                   passport_package_result_t *out)
 {
-    if ((kind != PASSPORT_PACKAGE_APP && kind != PASSPORT_PACKAGE_THEME) ||
-        !passport_package_id_is_valid(id)) return ESP_ERR_INVALID_ARG;
-    char path[256];
-    esp_err_t err = join_path(path, sizeof(path), kind_dir(kind), id);
-    if (err != ESP_OK) return err;
-    return passport_storage_remove_tree(path);
+    if (!passport_storage_lock(UINT32_MAX)) return ESP_ERR_INVALID_STATE;
+    esp_err_t result = package_install_locked(package_path, out);
+    passport_storage_unlock();
+    return result;
+}
+
+esp_err_t passport_package_recover_installations(void)
+{
+    if (!passport_storage_lock(UINT32_MAX)) return ESP_ERR_INVALID_STATE;
+    esp_err_t result = recover_app_installations();
+    if (result == ESP_OK) result = recover_theme_installations();
+    if (result == ESP_OK && unlink(PASSPORT_INCOMING_PACKAGE) != 0 &&
+        errno != ENOENT) {
+        result = ESP_FAIL;
+    }
+    if (result == ESP_OK) {
+        result = passport_storage_remove_tree(PASSPORT_STAGING_DIR);
+    }
+    if (result == ESP_OK) {
+        result = passport_storage_ensure_dir(PASSPORT_STAGING_DIR);
+    }
+    passport_storage_unlock();
+    return result;
 }

@@ -3,26 +3,32 @@ local plugin_path = assert(arg[1], "缺少授权面板插件入口路径")
 local page_state = {
     texts = {},
     ok_action = "",
-    long_ok_action = "",
 }
 local key_callback
 local message_callback
 local sent = {}
 
 assert(passport and passport.json, "测试运行器没有注册系统 JSON API")
-passport.ui = {}
+passport.ui = {
+    Style = {VIEW = 0, TEXT = 3, MUTED_TEXT = 4, ACCENT_TEXT = 5, CARD = 6},
+}
 passport.app = {}
 passport.link = {}
+passport.input = {
+    Key = {UP = 1, DOWN = 2, OK = 4},
+    KeyEvent = {PRESS = 0, CLICK = 1, DOUBLE_CLICK = 2, LONG_PRESS = 3},
+}
+passport.navigation = {}
 
-function passport.ui.page(title, status_bar, key_bar)
+function passport.navigation.set_root(title, render)
     page_state.title = title
-    page_state.status_bar = status_bar
-    page_state.key_bar = key_bar
+    render()
 end
 
-function passport.ui.text(text)
+function passport.ui.text(text, style)
     local handle = #page_state.texts + 1
     page_state.texts[handle] = text
+    page_state["style_" .. handle] = style
     return handle
 end
 
@@ -31,9 +37,8 @@ function passport.ui.set_text(handle, text)
     page_state.texts[handle] = text
 end
 
-function passport.ui.actions(ok_action, long_ok_action)
+function passport.ui.action(ok_action)
     page_state.ok_action = ok_action
-    page_state.long_ok_action = long_ok_action
 end
 
 function passport.app.on_key(callback)
@@ -74,10 +79,9 @@ end
 dofile(plugin_path)
 
 assert_equal(page_state.title, "Agent 授权", "页面标题")
-assert(page_state.status_bar and page_state.key_bar, "授权面板应显示系统状态栏和操作栏")
 assert_equal(page_state.texts[2], "等待 Agent 请求\n请保持本页面打开", "初始等待文案")
+assert_equal(page_state.style_2, passport.ui.Style.CARD, "请求内容使用公共 CardStyle")
 assert_equal(page_state.ok_action, "", "空闲确定动作")
-assert_equal(page_state.long_ok_action, "主页", "长按主页动作")
 
 local request = '{"v":1,"kind":"request","rid":"a-001","title":"执行命令","message":"是否执行 npm test","options":[["once","本次执行"],["always","始终允许"],["cancel","取消"]]}'
 local source = "22222-22222-2"
@@ -87,11 +91,11 @@ assert_equal(page_state.texts[2], "执行命令\n是否执行 npm test", "请求
 assert_equal(page_state.texts[3], "> 本次执行\n  始终允许\n  取消", "默认选项")
 assert_equal(page_state.ok_action, "确定", "待处理确定动作")
 
-press("down", "click")
+press(passport.input.Key.DOWN, passport.input.KeyEvent.CLICK)
 assert_equal(page_state.texts[3], "  本次执行\n> 始终允许\n  取消", "切换选项")
-press("ok", "double")
+press(passport.input.Key.OK, passport.input.KeyEvent.DOUBLE_CLICK)
 assert_equal(#sent, 0, "忽略确定双击")
-press("ok", "click")
+press(passport.input.Key.OK, passport.input.KeyEvent.CLICK)
 assert_equal(#sent, 1, "确认后发送一次")
 assert_equal(sent[1].target, source, "响应目标")
 local selected_response = sent_payload(1)

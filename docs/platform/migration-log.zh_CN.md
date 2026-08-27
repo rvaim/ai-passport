@@ -31,7 +31,7 @@
 - `passport_runtime`：受限 Lua 运行时和 App API。
 - 新 `main/main.c`：中文桌面、插件管理、设置、主题和系统事件任务。
 - `tools/pack_pap.py` / `inspect_pap.py` / `ble_install.py`。
-- `examples/counter` 和 `examples/themes/night`。
+- `examples/agent-auth-panel` 和 `examples/themes/night`。
 - `docs/platform/*` 全套架构/API/协议/开发/迁移/交付文档。
 
 ## 清理原则

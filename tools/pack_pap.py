@@ -20,20 +20,37 @@ PACKAGE_MAX_BYTES = 4 * 1024 * 1024
 KIND = {"app": 1, "theme": 2}
 HEADER = struct.Struct("<4sHHII")
 ENTRY = struct.Struct("<HHII")
-THEME_COLOR_TOKENS = {
-    "background", "surface", "item_background", "text", "muted_text", "accent",
-    "selection_text", "divider", "border", "shadow",
+THEME_STYLES = {
+    "view", "page", "surface", "text", "muted_text", "accent_text", "card",
+    "button", "button_pressed", "image", "list", "list_item",
+    "list_item_selected", "bar", "indicator", "arc", "slider", "knob",
+    "switch", "spinner", "line", "checkbox", "canvas", "divider",
 }
-THEME_INTEGER_TOKENS = {
-    "spacing": (2, 12),
+THEME_COLOR_PROPERTIES = {
+    "background_color", "border_color", "shadow_color", "text_color",
+    "line_color", "arc_color",
+}
+THEME_INTEGER_PROPERTIES = {
+    "background_opacity": (0, 255),
+    "opacity": (0, 255),
     "radius": (0, 32),
     "border_width": (0, 4),
+    "border_opacity": (0, 255),
     "shadow_width": (0, 12),
     "shadow_spread": (0, 6),
     "shadow_opacity": (0, 255),
     "shadow_offset_x": (-8, 8),
     "shadow_offset_y": (-8, 8),
+    "padding": (0, 24),
+    "gap": (0, 24),
+    "text_opacity": (0, 255),
+    "text_line_spacing": (-8, 16),
+    "line_opacity": (0, 255),
+    "line_width": (0, 8),
+    "arc_opacity": (0, 255),
+    "arc_width": (0, 16),
 }
+THEME_ALIGNMENTS = {"left", "center", "right"}
 THEME_COLOR_PATTERN = re.compile(r"#[0-9A-Fa-f]{6}")
 
 
@@ -65,7 +82,7 @@ def validate_manifest(m: dict) -> None:
         raise ValueError("type 必须是 app 或 theme")
     expected = ({"type", "id", "name", "version", "api", "runtime", "entry"}
                 if m["type"] == "app" else
-                {"type", "id", "name", "version", "api", "tokens"})
+                {"type", "id", "name", "version", "api", "styles"})
     missing = sorted(expected - set(m))
     unknown = sorted(set(m) - expected)
     if missing:
@@ -93,24 +110,36 @@ def validate_manifest(m: dict) -> None:
                 len(m["entry"].encode("ascii")) >= 96):
             raise ValueError("app 必须提供少于 96 字节的安全 entry 相对路径")
     if m["type"] == "theme":
-        tokens = m["tokens"]
-        if not isinstance(tokens, dict):
-            raise ValueError("theme 必须提供 tokens 对象")
-        known = THEME_COLOR_TOKENS | set(THEME_INTEGER_TOKENS)
-        missing = sorted(known - set(tokens))
-        unknown = sorted(set(tokens) - known)
-        if missing:
-            raise ValueError(f"主题缺少 token: {', '.join(missing)}")
-        if unknown:
-            raise ValueError(f"不支持的主题 token: {', '.join(unknown)}")
-        for name in THEME_COLOR_TOKENS:
-            value = tokens[name]
-            if not isinstance(value, str) or not THEME_COLOR_PATTERN.fullmatch(value):
-                raise ValueError(f"主题颜色 {name} 必须是 #RRGGBB")
-        for name, (minimum, maximum) in THEME_INTEGER_TOKENS.items():
-            value = tokens[name]
-            if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
-                raise ValueError(f"主题数值 {name} 必须是 {minimum}..{maximum} 的整数")
+        styles = m["styles"]
+        if not isinstance(styles, dict) or not styles:
+            raise ValueError("theme 必须提供非空 styles 对象")
+        unknown_styles = sorted(set(styles) - THEME_STYLES)
+        if unknown_styles:
+            raise ValueError(f"不支持的主题样式: {', '.join(unknown_styles)}")
+        known_properties = (THEME_COLOR_PROPERTIES |
+                            set(THEME_INTEGER_PROPERTIES) | {"text_align"})
+        for style_name, properties in styles.items():
+            if not isinstance(properties, dict) or not properties:
+                raise ValueError(f"主题样式 {style_name} 必须是非空对象")
+            unknown = sorted(set(properties) - known_properties)
+            if unknown:
+                raise ValueError(
+                    f"主题样式 {style_name} 包含未知属性: {', '.join(unknown)}")
+            for name in THEME_COLOR_PROPERTIES & set(properties):
+                value = properties[name]
+                if not isinstance(value, str) or not THEME_COLOR_PATTERN.fullmatch(value):
+                    raise ValueError(f"主题颜色 {style_name}.{name} 必须是 #RRGGBB")
+            for name in set(THEME_INTEGER_PROPERTIES) & set(properties):
+                minimum, maximum = THEME_INTEGER_PROPERTIES[name]
+                value = properties[name]
+                if (isinstance(value, bool) or not isinstance(value, int) or
+                        not minimum <= value <= maximum):
+                    raise ValueError(
+                        f"主题数值 {style_name}.{name} 必须是 {minimum}..{maximum} 的整数")
+            if ("text_align" in properties and
+                    properties["text_align"] not in THEME_ALIGNMENTS):
+                raise ValueError(
+                    f"主题文本对齐 {style_name}.text_align 必须是 left/center/right")
 
 
 def build(source: Path, output: Path) -> None:

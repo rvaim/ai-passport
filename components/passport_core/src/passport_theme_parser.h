@@ -5,7 +5,7 @@
 #include "esp_err.h"
 #include <stddef.h>
 
-/** Parse one exact current-schema theme manifest and its complete token set. */
+/** Parse one exact current-schema theme manifest and its sparse style layers. */
 esp_err_t passport_theme_parse_manifest_json(const char *json, size_t length,
                                              passport_manifest_t *manifest_out,
-                                             passport_theme_tokens_t *tokens_out);
+                                             passport_theme_definition_t *theme_out);

@@ -2,35 +2,83 @@
 
 # Theme System
 
-Themes use the same `.pap` transport and installer with `type: theme`, but execute no code. System pages read the active tokens when created, so the launcher, native system apps, and standard plug-in UI share one visual language.
+Themes use the `.pap` installer with `type: theme` and execute no code. A theme supplies sparse overrides for a fixed public style graph rather than a complete flat token table.
 
-## Tokens
+## Style inheritance
 
-Colors use the exact `#RRGGBB` form. Numeric values are bounded during packaging and again when the firmware installs or loads the theme.
+The platform owns these relationships:
 
-| Token | Range | Use |
-| --- | --- | --- |
-| `background` | RGB | Page and list canvas |
-| `surface` | RGB | Status and action bars |
-| `item_background` | RGB | Unselected standard list items |
-| `text` | RGB | Primary text |
-| `muted_text` | RGB | Secondary and status text |
-| `accent` | RGB | Selected list item and action emphasis |
-| `selection_text` | RGB | Text on selected list items |
-| `divider` | RGB | Status/action bar separators |
-| `border` | RGB | Standard list-item border |
-| `shadow` | RGB | Standard list-item shadow |
-| `spacing` | 2–12 px | Page padding and list rhythm |
-| `radius` | 0–32 px | Standard list-item corner radius |
-| `border_width` | 0–4 px | Standard list-item border thickness |
-| `shadow_width` | 0–12 px | LVGL shadow blur width; `0` disables the shadow |
-| `shadow_spread` | 0–6 px | Shadow expansion |
-| `shadow_opacity` | 0–255 | Shadow opacity; `0` disables the shadow |
-| `shadow_offset_x` | -8–8 px | Horizontal shadow offset |
-| `shadow_offset_y` | -8–8 px | Vertical shadow offset |
+```text
+VIEW
+├── PAGE
+│   └── LIST
+├── SURFACE
+├── TEXT
+│   ├── MUTED_TEXT
+│   ├── ACCENT_TEXT
+│   └── CHECKBOX
+├── CARD
+│   ├── BUTTON
+│   │   └── BUTTON_PRESSED
+│   ├── KNOB
+│   └── LIST_ITEM
+│       └── LIST_ITEM_SELECTED
+├── IMAGE
+├── BAR
+│   ├── SLIDER
+│   └── SWITCH
+├── INDICATOR
+├── ARC
+│   └── SPINNER
+├── LINE
+├── CANVAS
+└── DIVIDER
+```
 
-All 18 tokens are required. Missing, duplicate, or unknown token names, colors without `#`, and out-of-range values are rejected before an installed directory is committed. Installed themes are never completed from built-in defaults; the built-in default theme is a separate system theme.
+The built-in theme first resolves every property as a fallback. An installed theme can then override any non-empty subset under `styles`: ancestor overrides inherit through the graph, and a more-specific installed style wins last. Explicit zero is an override, not an omission. Unknown style or property names, duplicates, empty style objects, malformed colors, and out-of-range numbers are rejected.
 
-Borders and shadows are applied only to shared list items. Their dimensions are bounded and the list reserves the necessary draw margin, avoiding clipping without allocating image assets, extra LVGL objects, timers, or tasks. Large soft shadows still cost more pixels to blend than a zero-effect theme; use the smallest width that expresses the style.
+```json
+{
+  "type": "theme",
+  "id": "theme.example",
+  "name": "Example",
+  "version": "1.0.0",
+  "api": 1,
+  "styles": {
+    "view": {
+      "background_color": "#111318",
+      "text_color": "#F4F6F8"
+    },
+    "card": {
+      "background_color": "#1C2028",
+      "radius": 4,
+      "border_width": 1
+    }
+  }
+}
+```
 
-Themes cannot replace the shared 14 px Chinese font, change hardware key semantics, alter layouts, or inject scripts. Examples include the restrained [Night theme](../../examples/themes/night/manifest.json) and the high-contrast [Neo-Brutalism theme](../../examples/themes/neo-brutalism/README.md).
+Style JSON names are `view`, `page`, `surface`, `text`, `muted_text`, `accent_text`, `card`, `button`, `button_pressed`, `image`, `list`, `list_item`, `list_item_selected`, `bar`, `indicator`, `arc`, `slider`, `knob`, `switch`, `spinner`, `line`, `checkbox`, `canvas`, and `divider`.
+
+## Properties and bounds
+
+Colors are exact `#RRGGBB` strings. Opacities use 0–255.
+
+| Property | Range |
+| --- | --- |
+| `background_color`, `border_color`, `shadow_color`, `text_color`, `line_color`, `arc_color` | RGB |
+| `background_opacity`, `opacity`, `border_opacity`, `shadow_opacity`, `text_opacity`, `line_opacity`, `arc_opacity` | 0–255 |
+| `radius` | 0–32 px |
+| `border_width` | 0–4 px |
+| `shadow_width` | 0–12 px |
+| `shadow_spread` | 0–6 px |
+| `shadow_offset_x`, `shadow_offset_y` | -8–8 px |
+| `padding`, `gap` | 0–24 px |
+| `text_align` | `left`, `center`, `right` |
+| `text_line_spacing` | -8–16 px |
+| `line_width` | 0–8 px |
+| `arc_width` | 0–16 px |
+
+Native components and PAP components reference the same resolved style objects. The UI layer builds 24 shared LVGL styles per active theme instead of copying full local styles to every object. Composite widgets reuse `INDICATOR` and `KNOB` on their LVGL parts. This keeps the model deterministic and bounded on the no-PSRAM ESP32-C3.
+
+Themes cannot add style classes, alter the inheritance graph, replace fonts, change navigation or key semantics, modify layouts, or run scripts. Keep shadows small because blend cost grows with the affected pixel area. See the [Night](../../examples/themes/night/manifest.json) and [Neo-Brutalism](../../examples/themes/neo-brutalism/README.md) examples.

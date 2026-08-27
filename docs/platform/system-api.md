@@ -2,77 +2,116 @@
 
 # Passport System API v1
 
-## Lua API
+## Page navigation
 
-### `passport.ui.page(title, status_bar, key_bar)`
+Every PAP owns one system navigator. The entry script must install a root route before it returns:
 
-Create and show a system page. The system owns the 240×320 layout, theme, font, and bars.
+```lua
+passport.navigation.set_root("Title", function()
+    -- Build this route's current UI here.
+end)
+```
 
-### `passport.ui.text(text) -> handle`
+`set_root(title, render)`, `push(title, render)`, and `replace(title, render)` store a render callback and rebuild only the visible page. `pop() -> boolean` returns to the previous route, `depth() -> integer` reports the current depth, and `can_pop() -> boolean` reports whether a previous route exists. The stack is bounded to eight routes. Navigation cannot be changed from inside a render callback.
 
-Create shared 14 px Chinese text in the current content area and return an opaque handle.
+The system consumes long-OK. At depth greater than one it pops the current route; at the root it stops the PAP and opens the launcher. A PAP cannot replace or veto this behavior. The bottom bar displays the localized long-press Back or Home hint automatically.
 
-### `passport.ui.set_text(handle, text)`
+## UI and public styles
 
-Update text created by the system.
+The runtime exposes protected wrappers around these enabled LVGL objects:
 
-### `passport.ui.actions(ok_action, long_ok_action)`
+| Constructor | Result |
+| --- | --- |
+| `view(style[, parent])` | Flex-column container |
+| `text(text[, style[, parent]])` | Wrapping shared-font label |
+| `button(text[, style[, parent]])` | Button with a centered label |
+| `image(path, width, height[, style[, parent]])` | PAP resource in little-endian RGB565 |
+| `list(style[, parent])`, `list_item(text, list[, style])` | Scrollable list and selectable row |
+| `bar(value[, style[, parent]])` | Progress bar |
+| `arc(value[, style[, parent]])` | Arc gauge |
+| `slider(value[, style[, parent]])` | Slider controlled by PAP key logic |
+| `switch(checked[, style[, parent]])` | Boolean switch |
+| `spinner(style[, parent])` | Animated spinner |
+| `line({x1,y1,x2,y2,...}[, style[, parent]])` | Polyline with 2–64 points |
+| `checkbox(text, checked[, style[, parent]])` | Checkbox |
+| `canvas(width, height[, style[, parent]])` | RGB565 drawing surface |
 
-Set the two app-owned action nouns in the bottom bar. The system renders three fixed slots:
+Omitting a parent places the object in the current page content area. Only a View can be a generic parent; `list_item` requires a List. Constructors return protected handles rather than `lv_obj_t *` pointers.
 
-- left: Font Awesome UP/DOWN icons plus the localized selection label;
-- center: `OK ` plus `ok_action`;
-- right: the localized long-press prefix plus `long_ok_action`.
+Style constants are integers under `passport.ui.Style`:
 
-Use two to four Chinese characters per action. Overflow is ellipsized. These are hints, not event bindings: UP/DOWN remain ordinary key events, and long-OK is always intercepted by the system as Home.
+`VIEW`, `PAGE`, `SURFACE`, `TEXT`, `MUTED_TEXT`, `ACCENT_TEXT`, `CARD`, `BUTTON`, `BUTTON_PRESSED`, `IMAGE`, `LIST`, `LIST_ITEM`, `LIST_ITEM_SELECTED`, `BAR`, `INDICATOR`, `ARC`, `SLIDER`, `KNOB`, `SWITCH`, `SPINNER`, `LINE`, `CHECKBOX`, `CANVAS`, and `DIVIDER`.
 
-### `passport.ui.status_bar(visible)` / `passport.ui.key_bar(visible)`
+The platform resolves these through a fixed inheritance graph. Every style ultimately inherits View; component styles then add their semantic layer. A PAP can therefore use `CARD`, `BUTTON`, or `BAR` without copying colors, radii, borders, shadows, or text settings. Changing the active theme changes components on their next render.
 
-Show or hide a system bar at runtime; the content area is recalculated automatically.
+Additional UI calls:
 
-### `passport.json.decode(text) -> value, error`
+- `set_text(handle, text)` updates Text, Button, ListItem, or Checkbox text.
+- `passport.ui.set_style(handle, style)` replaces its public style.
+- `passport.ui.set_property(handle, property, value)` applies one local override.
+- `set_value(handle, value[, animate])` and `set_range(handle, min, max)` operate on Bar, Arc, and Slider.
+- `set_checked(handle, checked)` operates on Switch and Checkbox; `set_selected(list_item, selected)` updates a ListItem and scrolls it into view; `set_pressed(button, pressed)` drives the themed Button pressed state from key events.
+- `set_size(handle, width, height)`, `arc_angles(arc, start, end)`, `spinner_params(spinner, duration_ms, sweep)`, and `image_scale(image, scale)` configure bounded widget geometry.
+- `canvas_fill`, `canvas_pixel`, `canvas_line`, and `canvas_rect` draw with numeric `0xRRGGBB` colors. Coordinates must remain inside the Canvas.
+- `passport.ui.action(ok_action)` sets only the system-owned OK hint.
+- `passport.ui.status_bar(visible)` and `passport.ui.key_bar(visible)` toggle system bars.
 
-Decode UTF-8 JSON into Lua values. Objects become string-keyed tables, arrays become
-1-based tables, and JSON `null` becomes the stable `passport.json.null` sentinel.
-Success returns `value, nil`; invalid or over-limit input returns `nil, error`.
+Handles become invalid as soon as their route is destroyed. Local property constants also include `LINE_COLOR`, `LINE_OPACITY`, `LINE_WIDTH`, `ARC_COLOR`, `ARC_OPACITY`, and `ARC_WIDTH` in addition to the background, border, shadow, spacing, and text properties. Colors are numeric `0xRRGGBB`; alignment values are `passport.ui.TextAlign.LEFT`, `CENTER`, and `RIGHT`. Theme defaults should be preferred to local overrides.
 
-### `passport.json.encode(value) -> text, error`
+Each page is limited to 48 underlying PAP-created LVGL objects; a Button or ListItem also consumes one object for its label. Image, Line, and Canvas buffers share a 32 KiB page budget. An Image resource must contain exactly `width * height * 2` raw RGB565 bytes. Canvas dimensions are additionally constrained by that budget. PNG/JPEG decoders and arbitrary LVGL pointers are deliberately not exposed.
 
-Encode a Lua value as compact UTF-8 JSON. A contiguous integer-keyed table becomes an
-array; an empty unmarked table becomes an object. Use `passport.json.array()` when an
-empty table must encode as `[]`. Success returns `text, nil`; unsupported, cyclic,
-sparse, mixed-key, or over-limit data returns `nil, error`.
+## Input enums
 
-### `passport.json.array([table]) -> table`
+`passport.app.on_key(callback)` receives two integers, not strings:
 
-Mark a table as a JSON array without copying it. With no argument, creates an empty
-array. It returns `nil, error` instead of replacing an unrelated existing metatable.
+- `passport.input.Key.UP`, `DOWN`, `OK`
+- `passport.input.KeyEvent.PRESS`, `CLICK`, `DOUBLE_CLICK`, `LONG_PRESS`
 
-### `passport.json.null`
+UP and DOWN double-clicks are delivered as `DOUBLE_CLICK`. Long-OK is reserved for navigation and is never delivered. The current ESP32-C3 board connects all three buttons to one ADC resistor ladder, so simultaneous buttons cannot be identified; `passport.input.supports_chords` is `false`. Key values are bit flags to leave room for a future chord-capable board, but PAPs must not infer unavailable combinations.
 
-System-owned sentinel used to preserve JSON `null` in arrays and objects. Encoding the
-sentinel (or a top-level Lua `nil`) produces JSON `null`.
+The first completed key sequence after screen-off can be consumed solely to wake the display.
 
-JSON operations are bounded to 4096 input/output bytes, 12 nesting levels, and 128
-values. Strings must be valid UTF-8 without NUL/U+0000; numbers must be finite and
-integers must remain within the exact IEEE-754 range of +/-`9007199254740991`.
+## Data and device APIs
 
-### `passport.app.on_key(callback)`
+- `passport.app.on_message(callback)` receives `(message, source_code)` for the foreground app namespace.
+- `passport.device.code() -> string` returns the public device code.
+- `passport.link.send(target_code, message) -> ok, error` sends over the current subscribed BLE connection.
+- `passport.json.decode`, `encode`, `array`, and `null` provide the shared bounded JSON codec.
 
-Register for key events. Long-OK is a system Home action and is not delivered to the app.
+JSON input/output is limited to 4096 bytes, 12 nesting levels, and 128 values. Strings must be valid UTF-8 without NUL/U+0000. Numbers must be finite, and integers must fit the exact IEEE-754 range of +/-`9007199254740991`.
 
-### `passport.app.on_message(callback)`
+## Persistent app storage
 
-Receive Passport Link messages for the foreground app namespace.
+Every app receives a private persistent directory selected from the running manifest ID. PAP code never supplies an app ID or a physical path and cannot access another app's data. Updating the same app ID preserves its data; uninstalling the app removes its bundle and data together.
 
-### `passport.device.code() -> string`
+Storage is asynchronous so Flash I/O never runs in a Lua/UI callback:
 
-Return the public device code, for example `22222-22222-2`. Apps cannot change it.
+```lua
+local request, error = passport.storage.write("state.json", json, function(result)
+    if result == passport.storage.Error.OK then
+        -- The replacement is durable.
+    end
+end)
+```
 
-### `passport.link.send(target_code, message) -> ok, error`
+- `read(path, callback)` calls `callback(error, data_or_nil)`.
+- `write(path, data, callback)` atomically replaces one file and calls `callback(error)`.
+- `remove(path, callback)` removes one file or private subtree and calls `callback(error)`.
+- `list([path], callback)` calls `callback(error, entries_or_nil)`. Each entry has `name`, `size`, and `is_directory`.
+- `usage(callback)` calls `callback(error, used_bytes, quota_bytes, file_count)`.
 
-Send a target-addressed message over the current BLE connection. V1 does not actively scan for or connect to the target; the call fails when no client is connected or subscribed.
+Submission returns `request_id, Error.OK`, or `nil, error` when it cannot be queued. Error integers are under `passport.storage.Error`: `OK`, `NOT_FOUND`, `INVALID_PATH`, `TOO_LARGE`, `QUOTA_EXCEEDED`, `NO_SPACE`, `BUSY`, `IO_ERROR`, `CANCELED`, and `NO_MEMORY`.
+
+Paths are portable relative ASCII, at most 95 bytes and four segments. Absolute paths, empty segments, dot-prefixed internal names, `.`/`..`, and backslashes are rejected. A write creates its parent directories. Each app may retain at most 16 files and 64 KiB of FAT-allocated data; all app data is globally capped at 1 MiB. One read or write is limited to 4096 bytes, and at most two requests may be outstanding. Accepted writes finish after an ordinary app stop, but callbacks for a closed Lua VM are discarded.
+
+## Runtime limits and lifecycle
+
+Only one foreground Lua app runs at a time. It has an 80 KiB Lua heap limit, one eight-frame navigator, one visible LVGL page, at most 48 PAP-created LVGL objects, at most 32 KiB of dynamic UI buffers on that page, and two outstanding storage requests. Route changes destroy the old LVGL tree and call the destination render callback; hidden page trees are never retained.
+
+Registering `on_key` again replaces the current route's key callback. Route changes clear it, so each render callback should register the handler for that page. `on_message` is app-wide. The optional global `on_stop()` runs before the VM closes.
+
+Callbacks execute in the system UI task while the LVGL lock is held. Keep them non-blocking.
 
 ## C system services
 
-C services are split across identity, persistent device settings, storage, package installation, app registry, theme, UI, BLE Link, and the single-foreground Lua runtime. The runtime owns one cJSON-backed codec and exposes it to every PAP as `passport.json`; plug-ins do not bundle or load their own JSON library. `passport_settings_*` owns brightness, volume, screen timeout, key sound, inactivity tracking, and wake suppression; fresh or invalid NVS state resolves to 50%, 30%, 30 seconds, and key sound off. These controls are system-only and are not exposed to Lua. Public C headers live under each `components/passport_*/include` directory. Plugin authors should target the Lua API rather than internal C implementation symbols.
+Public C headers under `components/passport_*/include` cover identity, settings, storage, package installation, app registry, fixed style resolution, shared UI, navigation, BLE Link, and the single-foreground Lua runtime. PAP authors should target the Lua API instead of internal C symbols.

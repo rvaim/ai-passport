@@ -70,6 +70,10 @@ static bool object_has_exact_fields(const cJSON *object,
     size_t count = 0;
     for (const cJSON *child = object->child; child; child = child->next) {
         if (!field_is_allowed(child->string, allowed, allowed_count)) return false;
+        for (const cJSON *previous = object->child; previous != child;
+             previous = previous->next) {
+            if (strcmp(previous->string, child->string) == 0) return false;
+        }
         ++count;
     }
     return count == allowed_count;
@@ -108,7 +112,7 @@ esp_err_t passport_manifest_parse_document(const char *json, size_t len,
         "type", "id", "name", "version", "api", "runtime", "entry",
     };
     static const char *const theme_fields[] = {
-        "type", "id", "name", "version", "api", "tokens",
+        "type", "id", "name", "version", "api", "styles",
     };
     const char *const *fields = header_kind == PASSPORT_PACKAGE_APP ? app_fields : theme_fields;
     size_t field_count = header_kind == PASSPORT_PACKAGE_APP ?
@@ -122,7 +126,7 @@ esp_err_t passport_manifest_parse_document(const char *json, size_t len,
     cJSON *api = cJSON_GetObjectItemCaseSensitive(root, "api");
     cJSON *entry = cJSON_GetObjectItemCaseSensitive(root, "entry");
     cJSON *runtime = cJSON_GetObjectItemCaseSensitive(root, "runtime");
-    cJSON *tokens = cJSON_GetObjectItemCaseSensitive(root, "tokens");
+    cJSON *styles = cJSON_GetObjectItemCaseSensitive(root, "styles");
     const char *expected_kind = header_kind == PASSPORT_PACKAGE_APP ? "app" : "theme";
 
     bool ok = object_has_exact_fields(root, fields, field_count) &&
@@ -139,7 +143,7 @@ esp_err_t passport_manifest_parse_document(const char *json, size_t len,
              strlen(entry->valuestring) < PASSPORT_MANIFEST_ENTRY_MAX &&
              cJSON_IsString(runtime) && strcmp(runtime->valuestring, "lua") == 0;
     } else {
-        ok = ok && cJSON_IsObject(tokens);
+        ok = ok && cJSON_IsObject(styles);
     }
     if (!ok) {
         cJSON_Delete(root);
@@ -164,8 +168,8 @@ esp_err_t passport_package_parse_manifest_json(const char *json, size_t len,
                                                passport_manifest_t *out)
 {
     if (header_kind == PASSPORT_PACKAGE_THEME) {
-        passport_theme_tokens_t tokens;
-        return passport_theme_parse_manifest_json(json, len, out, &tokens);
+        passport_theme_definition_t theme;
+        return passport_theme_parse_manifest_json(json, len, out, &theme);
     }
     cJSON *document = NULL;
     esp_err_t err = passport_manifest_parse_document(
