@@ -16,6 +16,8 @@ idf.py fullclean              # remove stale generated build state only
 
 The tracked `dependencies.lock` pins Managed Component resolution. After changing an `idf_component.yml`, regenerate the lock with ESP-IDF 5.5.3, review version changes, and commit it with the manifest. An ordinary build must not leave an unexplained lock-file diff.
 
+The static host suite compiles against the locked Lua source, so a fresh checkout must materialize Managed Components before `--static`. Activate ESP-IDF 5.5.3 and run `idf.py -B build/static-deps -D "SDKCONFIG=$PWD/build/static-deps/sdkconfig" reconfigure`; CI performs the same isolated dependency-resolution step automatically. `managed_components/` remains generated and must not be committed.
+
 Firmware validation uses a fresh temporary build directory and an isolated `sdkconfig` generated from the tracked defaults. It does not consume or overwrite a developer's root `sdkconfig`, and it copies only the verified merged image to `build/FoloToy-AI-Passport-full.bin`.
 
 The baseline contains hardware-independent host tests for Passport Link frame encoding/validation, native input navigation policy, the settings value/wake-suppression model, the Web installer protocol, the `.pap` package format, exact manifest/theme parsing, the system JSON API running against the real Lua and cJSON sources, and the UI font's CMake source graph/common-Chinese charset. The Web test requires Node.js 18 or newer; the cJSON-backed host tests run when ESP-IDF 5.5.3 is activated:

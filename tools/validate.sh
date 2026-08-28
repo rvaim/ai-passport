@@ -11,8 +11,16 @@ usage() {
 run_static_checks() {
     local actionlint_bin
     local cjson_dir
+    local lua_source
     local site_dir
     local test_dir
+
+    lua_source="${repo_root}/managed_components/espressif__lua/lua/onelua.c"
+    if [[ ! -f "${lua_source}" ]]; then
+        echo "ERROR: locked ESP-IDF managed components are missing." >&2
+        echo "Activate ESP-IDF 5.5.3 and run an isolated idf.py reconfigure before --static." >&2
+        return 1
+    fi
 
     python3 tools/check_repo.py
     python3 tools/generate_ui_font.py --check

@@ -23,6 +23,17 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
+      - name: Resolve locked ESP-IDF components
+        uses: espressif/esp-idf-ci-action@9d38657f3d789ca759b2b37aaf5ceffbc42c4f0d # v1
+        with:
+          esp_idf_version: v5.5.3
+          target: esp32c3
+          command: >-
+            idf.py
+            -B build/static-deps
+            -D SDKCONFIG=/app/${{ github.repository }}/build/static-deps/sdkconfig
+            reconfigure
+
       - name: Install verified actionlint
         run: |
           actionlint_bin="$(./tools/install-actionlint.sh "$RUNNER_TEMP/actionlint")"

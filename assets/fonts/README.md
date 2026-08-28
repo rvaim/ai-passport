@@ -9,10 +9,10 @@ This directory documents reusable font assets and their generated firmware desti
 ## Shared 14 px Chinese UI font
 
 - Generated source: [`components/passport_ui/src/passport_ui_font_zh_14.c`](../../components/passport_ui/src/passport_ui_font_zh_14.c)
-- Font source: [`NotoSansSC-Regular.ttf`](../../managed_components/lvgl__lvgl/tests/src/test_files/fonts/noto/NotoSansSC-Regular.ttf), bundled by the locked LVGL dependency
-- License: [SIL Open Font License 1.1](../../managed_components/lvgl__lvgl/tests/src/test_files/fonts/noto/OFL.txt)
-- Action-icon source: [`FontAwesome5-Solid+Brands+Regular.woff`](../../managed_components/lvgl__lvgl/scripts/built_in_font/FontAwesome5-Solid+Brands+Regular.woff); only UP and DOWN are included
-- Action-icon license: [Font Awesome Free license](../../managed_components/lvgl__lvgl/scripts/built_in_font/font_license/FontAwesome5/LICENSE.txt)
+- Font source: [`NotoSansSC-Regular.ttf`](https://github.com/lvgl/lvgl/blob/v9.5.0/tests/src/test_files/fonts/noto/NotoSansSC-Regular.ttf), bundled by the locked LVGL 9.5.0 dependency
+- License: [SIL Open Font License 1.1](https://github.com/lvgl/lvgl/blob/v9.5.0/tests/src/test_files/fonts/noto/OFL.txt)
+- Action-icon source: [`FontAwesome5-Solid+Brands+Regular.woff`](https://github.com/lvgl/lvgl/blob/v9.5.0/scripts/built_in_font/FontAwesome5-Solid+Brands+Regular.woff); only UP and DOWN are included
+- Action-icon license: [Font Awesome Free license](https://github.com/lvgl/lvgl/blob/v9.5.0/scripts/built_in_font/font_license/FontAwesome5/LICENSE.txt)
 - Raster format: LVGL, 14 px, 4 bits per pixel, built-in RLE compression, no kerning
 - Character range: printable ASCII, all 3,755 GB2312 level-one common ideographs, non-ASCII punctuation required by compiled firmware sources, and two action icons; currently 3,878 glyphs total
 - The 4 bpp alpha mask provides 16 antialiasing levels. The 14 px profile keeps glyph bounds and temporary draw buffers smaller than the former 16 px profile; the added data remains in Flash.

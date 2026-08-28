@@ -15,7 +15,7 @@
 
 ## Pipeline
 
-1. The static job runs `./tools/validate.sh --static`. The shared gate checks repository rules, host behavior, the `.pap` packer, Web Bluetooth protocol helpers, and the exact installer-only Pages output.
+1. The static job uses ESP-IDF 5.5.3 to materialize the Managed Components pinned by `dependencies.lock` in an isolated build directory, then runs `./tools/validate.sh --static`. The shared gate checks repository rules, host behavior, the `.pap` packer, Web Bluetooth protocol helpers, and the exact installer-only Pages output.
 2. The firmware job runs `./tools/validate.sh --firmware` with ESP-IDF 5.5.3 for ESP32-C3, verifies the merged image, and uploads it as an internal workflow artifact.
 3. For non-PR events, the release job creates or refreshes `latest`, or creates the version-tag Release. Releases contain only `FoloToy-AI-Passport-full.bin` and `SHA256SUMS`.
 4. In parallel, the Pages job uses GitHub's `actions/configure-pages` to read or enable the Pages site, builds the dependency-free artifact directly from `web/installer.html`, `web/installer.mjs`, and `web/passport-install-protocol.mjs`, and uploads it.

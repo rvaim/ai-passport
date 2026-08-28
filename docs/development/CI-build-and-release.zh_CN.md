@@ -15,7 +15,7 @@
 
 ## 流水线
 
-1. 静态任务运行 `./tools/validate.sh --static`。共用门禁检查仓库规则、主机行为、`.pap` 打包器、Web Bluetooth 协议 helper，以及只包含安装器的准确 Pages 产物。
+1. 静态任务先使用 ESP-IDF 5.5.3 在隔离构建目录中生成 `dependencies.lock` 锁定的 Managed Components，再运行 `./tools/validate.sh --static`。共用门禁检查仓库规则、主机行为、`.pap` 打包器、Web Bluetooth 协议 helper，以及只包含安装器的准确 Pages 产物。
 2. 固件任务使用 ESP-IDF 5.5.3 针对 ESP32-C3 运行 `./tools/validate.sh --firmware`，验证合并镜像，并把它上传为工作流内部产物。
 3. 对非 PR 事件，固件发布任务创建或刷新 `latest`，或者创建版本 Tag 对应的 Release。Release 只包含 `FoloToy-AI-Passport-full.bin` 与 `SHA256SUMS`。
 4. Pages 任务与固件发布并行运行：它先使用 GitHub 官方 `actions/configure-pages` 读取或启用 Pages，再直接用 `web/installer.html`、`web/installer.mjs` 和 `web/passport-install-protocol.mjs` 构建并上传无依赖产物。
