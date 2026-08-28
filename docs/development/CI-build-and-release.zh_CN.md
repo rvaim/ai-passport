@@ -18,14 +18,14 @@
 1. 静态任务先使用 ESP-IDF 5.5.3 在隔离构建目录中生成 `dependencies.lock` 锁定的 Managed Components，再运行 `./tools/validate.sh --static`。共用门禁检查仓库规则、主机行为、`.pap` 打包器、Web Bluetooth 协议 helper，以及只包含安装器的准确 Pages 产物。
 2. 固件任务使用 ESP-IDF 5.5.3 针对 ESP32-C3 运行 `./tools/validate.sh --firmware`，验证合并镜像，并把它上传为工作流内部产物。
 3. 对非 PR 事件，固件发布任务创建或刷新 `latest`，或者创建版本 Tag 对应的 Release。Release 只包含 `FoloToy-AI-Passport-full.bin` 与 `SHA256SUMS`。
-4. Pages 任务与固件发布并行运行：它先使用 GitHub 官方 `actions/configure-pages` 读取或启用 Pages，再直接用 `web/installer.html`、`web/installer.mjs` 和 `web/passport-install-protocol.mjs` 构建并上传无依赖产物。
+4. Pages 任务与固件发布并行运行：它先使用 GitHub 官方 `actions/configure-pages` 读取已经配置的 Pages 站点，再直接用 `web/installer.html`、`web/installer.mjs` 和 `web/passport-install-protocol.mjs` 构建并上传无依赖产物。
 5. Pages 部署任务发布已经上传的产物。Pages 配置与固件发布是独立任务，因此 Pages 配置失败不会阻断 BIN Release。
 
 所有 Action 都固定到完整 commit SHA。验证任务使用 `contents: read`；只有固件 Release 任务获得 `contents: write`；Pages 配置与部署使用独立的 `pages` 与 OIDC 权限。
 
 ## Pages 启用
 
-已经启用 Pages 的仓库不需要额外凭证：工作流会使用 `GITHUB_TOKEN` 读取配置，并通过 GitHub Actions 部署。若要让新仓库或 fork 首次运行时自动启用 Pages，需要新增名为 `PAGES_TOKEN` 的仓库 Actions Secret，其 Token 具有 Pages 写权限。GitHub 不允许工作流自动生成的 `GITHUB_TOKEN` 创建 Pages 站点。如果不配置该 Secret，则需要在仓库设置中手动启用一次 Pages，并把构建来源选择为 **GitHub Actions**。
+`rvaim/ai-passport` 已把 Pages 构建来源配置为 **GitHub Actions**。工作流使用短期 `GITHUB_TOKEN` 读取配置并部署，不需要 Personal Access Token 或 `PAGES_TOKEN` Secret。全新的 fork 仍需在仓库设置中启用一次 Pages 并选择 **GitHub Actions**，因为 GitHub 不允许工作流自动生成的 Token 自行创建 Pages 站点。
 
 ## PAP 与 Pages 边界
 

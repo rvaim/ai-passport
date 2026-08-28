@@ -8,7 +8,7 @@
 
 - 将 GitHub Pages 精简为一个统一的 Web Bluetooth 安装器，用于选择本地插件或主题 `.pap`。网站不再展示包目录、内置 PAP、构建文档页面或提供独立主题入口。
 - 从 CI 移除自动 PAP 目录生成、包重新生成、生成文件提交与 PAP Release 资源。Release 现在只包含经过验证的固件与校验和；配对码输入框仍会在连接和安装前规范化为大写 `XXXXX-XXXXX-X`。
-- 新增 GitHub 官方 Pages 配置步骤，并把 Pages 部署升级到 v5。已启用站点使用 `GITHUB_TOKEN` 即可部署；新仓库或 fork 配置 `PAGES_TOKEN` 仓库 Secret 后可自动启用 Pages。Pages 配置与固件发布现为独立任务，因此 Pages 失败不会阻断 BIN Release。
+- 新增 GitHub 官方 Pages 配置步骤，并把 Pages 部署升级到 v5。仓库 Pages 已使用 **GitHub Actions** 作为构建来源，部署只使用 `GITHUB_TOKEN`，不再依赖长期 PAT Secret。Pages 部署与固件发布相互独立，因此 Pages 失败不会阻断 BIN Release。
 - 移除定时上游同步工作流；fork 所有者现在通过 GitHub 的 **Sync fork** 或自选 Git 流程显式同步 `main`。
 - 更新夜间主题与新粗野主义主题示例，使其使用当前稀疏 `styles` Manifest，并补充系统“主题”App 生命周期说明。已安装主题现在拥有详情页和两步确认的异步卸载流程；内置默认主题受保护，删除当前主题前会先切回默认主题。
 - 将固定 Factory App 分区从 3 MiB 缩小到 2 MiB，并把释放的 1 MiB 全部分配给 `appfs`。当前应用仍保留约 39% 的 Factory 余量，插件、主题、staging 和私有数据分区则扩大到 5.94 MiB。
