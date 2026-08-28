@@ -85,6 +85,15 @@ run_static_checks() {
         "${lua_object}" \
         -lm -o "${test_dir}/test_passport_runtime_storage"
     "${test_dir}/test_passport_runtime_storage"
+    "${CC:-cc}" -std=c11 -O2 -Wall -Wextra -Werror \
+        -DMAKE_LIB -DLUA_32BITS=1 \
+        -Itests/host_stubs -Imanaged_components/espressif__lua/lua \
+        -Icomponents/passport_runtime/src \
+        tests/test_passport_runtime_clock.c \
+        components/passport_runtime/src/passport_runtime_clock.c \
+        "${lua_object}" \
+        -lm -o "${test_dir}/test_passport_runtime_clock"
+    "${test_dir}/test_passport_runtime_clock"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
         -Itests/host_stubs -Icomponents/passport_core/include \
         -Icomponents/passport_core/src \
@@ -118,6 +127,9 @@ run_static_checks() {
         "${test_dir}/test_passport_runtime_json" tests/test_passport_runtime_json.lua
         "${test_dir}/test_passport_runtime_json" \
             tests/test_agent_auth_plugin.lua examples/agent-auth-panel/main.lua
+        "${test_dir}/test_passport_runtime_json" \
+            tests/test_totp_authenticator_plugin.lua \
+            examples/totp-authenticator/main.lua
         "${CC:-cc}" -std=c11 -O2 -Wall -Wextra -Werror \
             -Itests/host_stubs -Icomponents/passport_core/include \
             -Icomponents/passport_core/src -I"${cjson_dir}" \
@@ -128,10 +140,11 @@ run_static_checks() {
             "${cjson_object}" -o "${test_dir}/test_passport_manifest"
         "${test_dir}/test_passport_manifest"
     else
-        echo "Passport JSON/API, manifest, theme, and Agent plug-in host tests: NOT RUN (activate ESP-IDF 5.5.3)"
+        echo "Passport JSON/API, manifest, theme, and PAP plug-in host tests: NOT RUN (activate ESP-IDF 5.5.3)"
     fi
     node tests/test_web_installer_protocol.mjs
     node tests/test_passport_auth_protocol.mjs
+    node tests/test_passport_totp_protocol.mjs
     python3 tests/test_ble_install.py
     python3 tests/test_generate_ui_font.py
     python3 tests/test_pack_pap.py

@@ -146,9 +146,11 @@ end)
 
 `passport.device.code()` 返回公开设备码。`passport.link.send(target_code, message)` 返回 `ok, error`，要求当前 BLE 客户端已连接并订阅。`passport.app.on_message` 只接收当前前台 App 命名空间内已验证的帧。Link payload 上限为 200 字节。
 
+需要时间驱动界面时，可由外部来源通过 `passport.clock.sync(unix_seconds_string)` 同步通用易失性时钟，用 `passport.clock.now()` 读取，再通过 `passport.app.on_tick(interval_ms, callback)` 刷新当前路由。由于 Lua 运行时使用 32 位数值，时间采用十进制字符串。固件持续供电期间，时钟可跨 PAP 启停保留；设备重启或断电后必须重新同步。tick 间隔限制为 250～60000 毫秒，并随对应路由销毁。
+
 ## 8. 生命周期
 
-入口只执行一次。再次注册 `on_key` 或 `on_message` 会替换旧回调。退出前会调用可选的全局钩子：
+入口只执行一次。在相同作用域再次注册 `on_key`、`on_tick` 或 `on_message` 会替换旧回调；按键与 tick 回调属于当前路由，消息回调属于整个 App。退出前会调用可选的全局钩子：
 
 ```lua
 function on_stop()
@@ -171,7 +173,7 @@ python3 tools/pack_pap.py my-plugin my-plugin.pap
 python3 tools/passport_cli.py install my-plugin.pap
 ```
 
-CLI 需要支持 BLE 的主机和 `tools/requirements.txt` 中的 Python 依赖。`web/` 下的 Web Bluetooth 安装器可用于受支持的桌面浏览器。
+CLI 需要支持 BLE 的主机和 `tools/requirements.txt` 中的 Python 依赖。`web/` 下的共享 Web Bluetooth 工具可在受支持的桌面浏览器中安装包并执行已支持的 App 配置流程。
 
 ## 11. 测试
 
@@ -185,6 +187,7 @@ CLI 需要支持 BLE 的主机和 `tools/requirements.txt` 中的 Python 依赖�
 - 收不到长按确定：符合设计，它属于导航器。
 - 收不到组合键：符合当前硬件能力，`supports_chords` 为 false。
 - Link 发送失败：检查客户端连接、订阅状态和 App service 命名空间。
+- 启动后时钟无效：每次设备重启或断电后同步一次；不要假设开发板存在电池供电 RTC。
 - 存储提交返回 `BUSY`：等待两个未完成请求之一回调，并合并重复状态写入。
 - 重新安装后数据消失：卸载会主动删除私有数据目录；同 ID 原地更新才会保留。
 

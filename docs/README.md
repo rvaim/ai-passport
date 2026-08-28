@@ -25,10 +25,11 @@ components/passport_ui/       page container, status bar, content, action-hint b
 components/passport_link/     BLE GATT, target-code checks, messages, .pap receive path
 components/passport_runtime/  one bounded Lua VM and the Passport Lua API
 examples/agent-auth-panel/    Agent authorization panel plug-in
+examples/totp-authenticator/  persistent TOTP 2FA authenticator plug-in
 examples/themes/night/        lightweight night-theme example
 tools/                        package, inspection, BLE install, and validation tools
-web/                          local Web Bluetooth .pap installer
-site/                         installer-only GitHub Pages builder
+web/                          shared Web Bluetooth installer and 2FA provisioning tool
+site/                         GitHub Pages builder for the shared device tool
 docs/platform/                architecture/API/protocol/package/theme/migration docs
 ```
 
@@ -50,7 +51,7 @@ Board constants remain exclusively in [`components/bsp/include/bsp_pins.h`](../c
 
 `.pap` is a sequential streaming package for apps and themes. BLE installation verifies the target device code, package header, manifest, paths, and CRC, writes into staging, then commits to `/passport/apps/<id>` or `/passport/themes/<id>`.
 
-The dependency-free [web installer](../web/installer.html) lets desktop Chrome or Edge enter the device pairing code, choose a local plug-in or theme `.pap`, match its exact BLE advertisement, verify the code again over GATT, and install with live progress. The browser requires one explicit device-authorization confirmation on first use; a previously authorized matching Passport reconnects without the device picker. Serve `web/` from HTTPS or localhost; local instructions and interaction states are documented in [its design note](../web/DESIGN.md). The public [GitHub Pages site](https://rvaim.github.io/ai-passport/) deploys this same unified installer as its root page and does not publish a package catalog or bundled PAP files.
+The dependency-free [Passport web tool](../web/installer.html) lets desktop Chrome or Edge enter the device pairing code and connect once. The same verified GATT connection can install a local plug-in or theme `.pap` with live progress, or send an `otpauth://totp` record and browser time to the [2FA Authenticator PAP](platform/totp-authenticator.md). The browser requires one explicit device-authorization confirmation on first use; a previously authorized matching Passport reconnects without the device picker. Serve `web/` from HTTPS or localhost; local instructions and interaction states are documented in [its design note](../web/DESIGN.md). The public [GitHub Pages site](https://rvaim.github.io/ai-passport/) deploys this shared tool as its root page and does not publish a package catalog or bundled PAP files.
 
 The system owns the status bar, content rectangle, action-hint bar, navigation, font, and inherited public styles. PAPs provide only the short-OK action noun; long-OK pops the current route and exits to the launcher only from the root. Key callbacks use integer enums, and `passport.input.supports_chords` is false because the current buttons share one ADC ladder. See the [plug-in development guide](platform/plugin-development.md) for a complete API example.
 
@@ -60,6 +61,7 @@ The system owns the status bar, content rectangle, action-hint bar, navigation, 
 - [Plug-in development](platform/plugin-development.md)
 - [System API](platform/system-api.md)
 - [Passport Link](platform/passport-link.md)
+- [2FA Authenticator PAP](platform/totp-authenticator.md)
 - [`.pap` format](platform/package-format.md)
 - [Themes](platform/theme-system.md)
 - [Migration/add/remove log](platform/migration-log.md)

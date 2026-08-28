@@ -33,6 +33,15 @@ Passport-22222-22222-2
 
 系统先校验版本、长度、CRC 和 target，再把当前 App namespace 的帧交给插件。
 
+Web Bluetooth 客户端把完整帧写入 Link RX，并订阅 Link TX 接收 PAP 响应：
+
+```text
+Link RX  01000000-0058-5254-524f-505353415031
+Link TX  01000000-0058-5454-524f-505353415031
+```
+
+service 字段是 App Manifest ID 的 UTF-8 字节经过 FNV-1a 计算得到的哈希值。只有前台 App 会接收其命名空间下的帧。
+
 ## BLE 安装
 
 GATT UUID：
@@ -49,11 +58,12 @@ Package Stat 01000053-474b-5054-524f-505353415031
 
 NimBLE 回调只复制小分片到固定队列；文件写入、CRC 和 `.pap` 安装在 `pap_install` 工作任务执行。
 
-无外部依赖的[网页安装器](../../web/installer.html)实现了完整流程。通过 HTTPS 或 localhost 提供 `web/`，在桌面版 Chrome 或 Edge 中选择 `.pap` 并输入配对码。浏览器设备选择器会发现广播 Passport Service UUID 的设备；连接后网页读取 Device Code characteristic，并要求完整设备码一致。Web Bluetooth 首次允许站点访问设备时，浏览器会强制要求一次明确的授权确认；网页可以直接重连已授权且配对码相符的设备，不再打开设备列表。命令行仍可使用 `tools/ble_install.py`。
+无外部依赖的[共享网页工具](../../web/installer.html)实现了完整流程。通过 HTTPS 或 localhost 提供 `web/`，在桌面版 Chrome 或 Edge 中输入配对码并连接一次。浏览器设备选择器会发现广播 Passport Service UUID 的设备；连接后网页读取 Device Code characteristic，并要求完整设备码一致。之后，同一条已验证 GATT 连接既可安装本地 `.pap`，也可执行 [2FA 验证器 PAP](totp-authenticator.zh_CN.md)记录的密钥发送流程。Web Bluetooth 首次允许站点访问设备时，浏览器会强制要求一次明确的授权确认；网页可以直接重连已授权且配对码相符的设备，不再打开设备列表。命令行安装仍可使用 `tools/ble_install.py`。
 
 ## 安全边界
 
 - 不使用 BLE 系统配对/绑定。
 - 不隐藏设备码，不把设备码视为密码。
 - V1 不解决窃听或恶意写入；产品目标仅是减少发送到错误设备的概率。
+- 通过 Link 发送的应用密钥（包括 TOTP seed）处于明文边界内。
 - Package Service 仍执行路径穿越拦截、尺寸限制和 CRC，避免损坏文件破坏目录。

@@ -19,7 +19,7 @@ Use this page to discover repository documentation. `authoritative` documents de
 | [development/build-and-test.md](development/build-and-test.md) | Build and validation commands | authoritative |
 | [development/coding-conventions.md](development/coding-conventions.md) | C and firmware conventions | authoritative |
 | [development/CI-validation.md](development/CI-validation.md) | Pull-request and main-branch validation | authoritative |
-| [development/CI-build-and-release.md](development/CI-build-and-release.md) | Firmware releases and installer-only GitHub Pages deployment | authoritative |
+| [development/CI-build-and-release.md](development/CI-build-and-release.md) | Firmware releases and shared-device-tool GitHub Pages deployment | authoritative |
 | [fork-guide.md](fork-guide.md) | Fork branch and documentation workflow | authoritative |
 | [hardware-design/README.md](hardware-design/README.md) | Hardware-document index | reference |
 | [hardware-design/AI_HARDWARE_DEVELOPMENT_GUIDE.md](hardware-design/AI_HARDWARE_DEVELOPMENT_GUIDE.md) | Board facts, constraints, validation, and troubleshooting | authoritative |
@@ -31,10 +31,11 @@ Use this page to discover repository documentation. `authoritative` documents de
 | [platform/system-api.md](platform/system-api.md) | Lua and C system API v1 | authoritative |
 | [platform/passport-link.md](platform/passport-link.md) | Public device addressing, Link frames, and BLE install protocol | authoritative |
 | [platform/agent-authorization.md](platform/agent-authorization.md) | Agent authorization panel PAP and compact JSON protocol | authoritative |
+| [platform/totp-authenticator.md](platform/totp-authenticator.md) | Persistent TOTP PAP, time model, and provisioning protocol | authoritative |
 | [platform/package-format.md](platform/package-format.md) | Streaming `.pap` package format | authoritative |
 | [platform/theme-system.md](platform/theme-system.md) | Fixed inherited public styles and theme overrides | authoritative |
 | [platform/migration-log.md](platform/migration-log.md) | Removed, retained, added, and cleanup record | authoritative |
 | [platform/build-and-delivery.md](platform/build-and-delivery.md) | Build requirements and verification boundaries | authoritative |
-| [../web/DESIGN.md](../web/DESIGN.md) | Web Bluetooth installer usage, interaction, and protocol limits | authoritative |
+| [../web/DESIGN.md](../web/DESIGN.md) | Shared Web Bluetooth tool usage, interaction, and protocol limits | authoritative |
 
 GitHub community documents: [CONTRIBUTING.md](../.github/CONTRIBUTING.md), [CODE_OF_CONDUCT.md](../.github/CODE_OF_CONDUCT.md), [SECURITY.md](../.github/SECURITY.md), and [SUPPORT.md](../.github/SUPPORT.md).

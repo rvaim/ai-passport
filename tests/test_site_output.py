@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that GitHub Pages contains only the unified local PAP installer."""
+"""Check that GitHub Pages contains only the shared local Passport tools."""
 
 from __future__ import annotations
 
@@ -39,6 +39,8 @@ expected_files = {
     "index.html",
     "installer.mjs",
     "passport-install-protocol.mjs",
+    "passport-link-protocol.mjs",
+    "passport-totp-protocol.mjs",
 }
 actual_files = {
     path.relative_to(output).as_posix()
@@ -55,9 +57,13 @@ assert {
     "package-file",
     "connect-button",
     "install-button",
+    "totp-form",
+    "sync-time-button",
+    "send-totp-button",
 } <= parser.ids
 
 script = (output / "installer.mjs").read_text(encoding="utf-8")
 assert "catalog.json" not in script
 assert "URLSearchParams" not in script
+assert "TOTP_SERVICE_ID" in script
 print("Site output host tests: PASS")

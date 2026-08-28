@@ -73,6 +73,18 @@ end)
 
 息屏后的第一组完整按键序列可能只用于唤醒屏幕。
 
+## 时间与页面定时回调
+
+`passport.app.on_tick(interval_ms, callback)` 为当前路由注册一个重复回调，间隔必须是 250～60000 毫秒的整数。再次注册会替换本路由原有的 tick；切换路由、停止 PAP 或回调抛错都会删除它。该回调只适合短小的界面刷新，不能用于阻塞工作。
+
+通用易失性时钟 API 与 TOTP 或其他具体业务协议无关：
+
+- `passport.clock.sync(unix_seconds_string) -> ok, error` 把十进制 Unix 秒字符串锚定到硬件单调计时器。
+- `passport.clock.valid() -> boolean` 判断当前供电会话是否已经获得有效时间。
+- `passport.clock.now() -> unix_seconds_string, error` 以十进制字符串返回当前 Unix 时间。
+
+使用字符串是为了避免现代 Unix 时间戳超出运行时 32 位数值 ABI 的安全范围。可接受时间为 UTC 2024-01-01 至 9999-12-31。ESP32-C3 开发板没有电池供电的墙上时钟，因此重启或断电后时钟会失效，必须重新同步；固件持续供电时，同步后的时钟可跨 PAP 启停共用。
+
 ## 数据与设备 API
 
 - `passport.app.on_message(callback)` 接收当前前台 App 命名空间的 `(message, source_code)`。
@@ -110,7 +122,7 @@ end)
 
 同一时间只运行一个前台 Lua App。它拥有 80 KiB Lua 堆上限、一个最多八层的导航器、一棵可见 LVGL 页面树、当前页面最多 48 个 PAP LVGL 对象、最多 32 KiB 动态 UI 缓冲，以及两个未完成存储请求。路由变化会销毁旧 LVGL 树并调用目标页面构建回调，不保留隐藏页面树。
 
-再次注册 `on_key` 会替换当前路由的按键回调。切换路由时会清除该回调，因此每个页面构建回调都应注册自己的按键处理函数。`on_message` 属于整个 App。VM 关闭前会调用可选的全局 `on_stop()`。
+再次注册 `on_key` 或 `on_tick` 会替换当前路由对应的回调。切换路由时会清除这两类回调，因此每个页面构建回调都应注册本页所需的处理函数。`on_message` 属于整个 App。VM 关闭前会调用可选的全局 `on_stop()`。
 
 回调在系统 UI 任务中执行，并持有 LVGL 锁，不能阻塞。
 

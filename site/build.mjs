@@ -32,8 +32,16 @@ async function buildSite(outputArgument) {
     path.join(webRoot, "passport-install-protocol.mjs"),
     path.join(output, "passport-install-protocol.mjs"),
   );
+  await copyFile(
+    path.join(webRoot, "passport-link-protocol.mjs"),
+    path.join(output, "passport-link-protocol.mjs"),
+  );
+  await copyFile(
+    path.join(webRoot, "passport-totp-protocol.mjs"),
+    path.join(output, "passport-totp-protocol.mjs"),
+  );
   await writeFile(path.join(output, ".nojekyll"), "", "utf8");
-  console.log(`Site build: PASS (unified installer, ${output})`);
+  console.log(`Site build: PASS (shared Passport tools, ${output})`);
 }
 
 try {

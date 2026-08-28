@@ -20,5 +20,5 @@
 - [agent-guide.md](agent-guide.md)：AI 开发工作流（面向 AI 编程助手：上下文建立、需求拆解、BSP 边界、验收交付格式）。
 - [build-and-test.md](build-and-test.md)：构建与验证（ESP-IDF 命令、逻辑测试、改动验证要求）。
 - [coding-conventions.md](coding-conventions.md)：代码约定（语言风格、复用、注释、测试同步、资源约束等）。
-- [CI-build-and-release.md](CI-build-and-release.md)：固件 Release 与仅安装器 GitHub Pages 自动部署。
+- [CI-build-and-release.md](CI-build-and-release.md)：固件 Release 与共享设备工具 GitHub Pages 自动部署。
 - [CI-validation.md](CI-validation.md)：Pull Request 与 main 的自动仓库检查、host tests 和固件验证。

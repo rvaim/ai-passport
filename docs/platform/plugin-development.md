@@ -148,9 +148,11 @@ Use `passport.storage` for private persistent state. Its asynchronous `read`, `w
 
 `passport.device.code()` returns the public device code. `passport.link.send(target_code, message)` returns `ok, error`; it requires the current BLE client to be connected and subscribed. `passport.app.on_message` receives only validated frames for the foreground app namespace. Link payload is at most 200 bytes.
 
+For time-dependent displays, synchronize the generic volatile clock from an external source with `passport.clock.sync(unix_seconds_string)`, read it with `passport.clock.now()`, and refresh the current route with `passport.app.on_tick(interval_ms, callback)`. Time values are decimal strings because the Lua runtime uses 32-bit numbers. The clock survives PAP restarts while firmware remains powered, but a device reboot or power loss requires another synchronization. Tick intervals are limited to 250–60,000 ms and are cleared with their route.
+
 ## 8. Lifecycle
 
-The entry runs once. A second `on_key` or `on_message` registration replaces the previous callback. The optional global hook runs before shutdown:
+The entry runs once. A second `on_key`, `on_tick`, or `on_message` registration replaces the previous callback in the same scope. Key and tick callbacks belong to the current route; the message callback belongs to the app. The optional global hook runs before shutdown:
 
 ```lua
 function on_stop()
@@ -173,7 +175,7 @@ python3 tools/pack_pap.py my-plugin my-plugin.pap
 python3 tools/passport_cli.py install my-plugin.pap
 ```
 
-The CLI requires a BLE-capable host and the Python dependencies in `tools/requirements.txt`. The Web Bluetooth installer under `web/` provides the browser flow on supported desktop browsers.
+The CLI requires a BLE-capable host and the Python dependencies in `tools/requirements.txt`. The shared Web Bluetooth tool under `web/` provides package installation and supported app-provisioning flows on desktop browsers.
 
 ## 11. Test
 
@@ -187,6 +189,7 @@ Run `./tools/validate.sh --static` while developing and `./tools/validate.sh` wi
 - No long-OK callback: expected; navigation owns it.
 - No chord callback: expected on the shared ADC ladder; `supports_chords` is false.
 - Link send fails: ensure a client is connected, subscribed, and using the correct app service namespace.
+- Clock is invalid after launch: synchronize it once after every device reboot or power loss; do not assume a battery-backed RTC.
 - Storage submission returns `BUSY`: wait for one of the two outstanding callbacks and coalesce repeated state writes.
 - Saved data disappears after reinstall: uninstall intentionally removes the private data directory; an in-place update with the same ID preserves it.
 

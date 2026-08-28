@@ -6,7 +6,8 @@
 
 ## Unreleased
 
-- Reduced GitHub Pages to one unified Web Bluetooth installer for local plug-in and theme `.pap` files. The site no longer displays a package catalog, bundles PAP assets, builds documentation pages, or provides a separate theme route.
+- Added the installable persistent 2FA Authenticator PAP. Base32, HMAC-SHA1, RFC 6238 TOTP, validation, and private account storage remain inside the PAP; firmware adds only a generic volatile clock and route-scoped tick callback. GitHub Pages now places one shared verified device connection above the Passport Installer and a plaintext 2FA key sender that accepts `otpauth://totp`, synchronizes browser time, and waits for the PAP's durable-write acknowledgement.
+- Reduced GitHub Pages to one unified local Web Bluetooth page. The site no longer displays a package catalog, bundles PAP assets, builds documentation pages, or provides a separate theme route.
 - Removed automated PAP catalog generation, package regeneration, generated-file commits, and PAP Release assets from CI. Releases now contain only the verified firmware and checksum; the pairing-code field still normalizes uppercase `XXXXX-XXXXX-X` input before device connection and installation.
 - Added the official Pages configuration step and upgraded Pages deployment to v5. The repository's Pages site uses the **GitHub Actions** build source and deploys with `GITHUB_TOKEN`, without a long-lived PAT secret. Pages deployment and firmware publication are independent, so a Pages failure cannot block the BIN Release.
 - Removed the scheduled upstream-sync workflow; fork owners now synchronize `main` explicitly with GitHub's **Sync fork** control or their chosen Git workflow.

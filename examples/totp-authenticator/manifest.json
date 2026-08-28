@@ -1,0 +1,9 @@
+{
+  "type": "app",
+  "id": "com.folotoy.totp-authenticator",
+  "name": "2FA 验证器",
+  "version": "1.0.0",
+  "api": 1,
+  "runtime": "lua",
+  "entry": "main.lua"
+}

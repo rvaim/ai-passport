@@ -19,7 +19,7 @@
 | [development/build-and-test.zh_CN.md](./development/build-and-test.zh_CN.md) | 工程规范 | authoritative | 构建与验证（ESP-IDF 命令、逻辑测试、改动验证要求） |
 | [development/coding-conventions.zh_CN.md](./development/coding-conventions.zh_CN.md) | 工程规范 | authoritative | 代码约定（语言风格、复用、注释、测试同步、资源约束） |
 | [development/agent-guide.zh_CN.md](./development/agent-guide.zh_CN.md) | 工程规范 | authoritative | AI 开发工作流（上下文建立、需求拆解、BSP 边界、验收交付格式） |
-| [development/CI-build-and-release.zh_CN.md](./development/CI-build-and-release.zh_CN.md) | CI 文档 | authoritative | 固件 Release 与仅安装器 GitHub Pages 自动部署 |
+| [development/CI-build-and-release.zh_CN.md](./development/CI-build-and-release.zh_CN.md) | CI 文档 | authoritative | 固件 Release 与共享设备工具 GitHub Pages 自动部署 |
 | [development/CI-validation.zh_CN.md](./development/CI-validation.zh_CN.md) | CI 文档 | authoritative | PR/main 自动仓库检查、host tests 与固件验证 |
 | [fork-guide.zh_CN.md](./fork-guide.zh_CN.md) | fork 工作流 | authoritative | 目录结构、main 保持干净、fork 约定、docs/assets 使用 |
 | [software-design/README.zh_CN.md](./software-design/README.zh_CN.md) | 软件设计索引 | 参考 | 软件设计文档子目录骨架 |
@@ -32,11 +32,12 @@
 | [platform/system-api.zh_CN.md](./platform/system-api.zh_CN.md) | 系统 API | authoritative | Lua 与 C 系统 API v1 |
 | [platform/passport-link.zh_CN.md](./platform/passport-link.zh_CN.md) | BLE / Link 协议 | authoritative | 公开设备码、目标校验、消息帧与安装 GATT |
 | [platform/agent-authorization.zh_CN.md](./platform/agent-authorization.zh_CN.md) | Agent 授权面板 | authoritative | PAP 面板、紧凑 JSON 载荷和 Web Demo |
+| [platform/totp-authenticator.zh_CN.md](./platform/totp-authenticator.zh_CN.md) | 2FA 验证器 | authoritative | 持久化 TOTP PAP、时间模型与密钥发送协议 |
 | [platform/package-format.zh_CN.md](./platform/package-format.zh_CN.md) | `.pap` 包格式 | authoritative | 顺序包、CRC、路径约束和安装事务 |
 | [platform/theme-system.zh_CN.md](./platform/theme-system.zh_CN.md) | 主题系统 | authoritative | 固定继承式公共样式与主题覆盖 |
 | [platform/migration-log.zh_CN.md](./platform/migration-log.zh_CN.md) | 改造记录 | authoritative | 删除、保留、新增和 cleanup 记录 |
 | [platform/build-and-delivery.zh_CN.md](./platform/build-and-delivery.zh_CN.md) | 构建与交付 | authoritative | 固件构建环境、验证边界和禁止伪造产物 |
-| [../web/DESIGN.zh_CN.md](../web/DESIGN.zh_CN.md) | 网页安装器 | authoritative | Web Bluetooth 安装器的使用方式、交互状态和协议边界 |
+| [../web/DESIGN.zh_CN.md](../web/DESIGN.zh_CN.md) | Passport 网页工具 | authoritative | 共享 Web Bluetooth 安装与 2FA 配置工具的交互和协议边界 |
 
 ## GitHub 社区治理文档
 

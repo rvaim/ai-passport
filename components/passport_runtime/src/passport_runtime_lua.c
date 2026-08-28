@@ -1,4 +1,5 @@
 #include "passport_runtime.h"
+#include "passport_runtime_clock.h"
 #include "passport_runtime_json.h"
 #include "passport_runtime_storage.h"
 #include "passport_runtime_ui.h"
@@ -44,6 +45,8 @@ typedef struct {
     char route_titles[PASSPORT_NAVIGATION_MAX_DEPTH][PAP_ROUTE_TITLE_MAX];
     int key_cb_ref;
     int message_cb_ref;
+    int tick_cb_ref;
+    lv_timer_t *tick_timer;
     passport_runtime_ui_state_t ui;
     passport_runtime_storage_state_t storage;
     uint32_t page_generation;
@@ -114,6 +117,18 @@ static void clear_page_key_callback(void)
     s_rt.key_cb_ref = LUA_NOREF;
 }
 
+static void clear_page_tick_callback(void)
+{
+    if (s_rt.tick_timer) {
+        lv_timer_delete(s_rt.tick_timer);
+        s_rt.tick_timer = NULL;
+    }
+    if (s_rt.L && s_rt.tick_cb_ref != LUA_NOREF) {
+        luaL_unref(s_rt.L, LUA_REGISTRYINDEX, s_rt.tick_cb_ref);
+    }
+    s_rt.tick_cb_ref = LUA_NOREF;
+}
+
 static void destroy_page(void)
 {
     if (s_rt.page) passport_ui_page_destroy(s_rt.page);
@@ -129,6 +144,7 @@ static bool render_current_route(void)
     if (!s_rt.L || !frame || frame->route == (uint32_t)LUA_NOREF) return false;
 
     clear_page_key_callback();
+    clear_page_tick_callback();
     destroy_page();
     size_t index = passport_navigation_depth(&s_rt.navigation) - 1U;
     s_rt.page = passport_ui_page_create(s_rt.route_titles[index], true, true);
@@ -298,6 +314,40 @@ static int replace_callback(lua_State *L, int *slot)
 static int l_app_on_key(lua_State *L) { return replace_callback(L, &s_rt.key_cb_ref); }
 static int l_app_on_message(lua_State *L) { return replace_callback(L, &s_rt.message_cb_ref); }
 
+/*
+ * LVGL invokes this while holding its own task context. All other Lua entry
+ * points also run under the BSP LVGL lock, so one VM is never entered twice.
+ */
+static void tick_timer_callback(lv_timer_t *timer)
+{
+    runtime_t *runtime = (runtime_t *)lv_timer_get_user_data(timer);
+    if (!runtime || !runtime->L || runtime->tick_cb_ref == LUA_NOREF) return;
+    lua_rawgeti(runtime->L, LUA_REGISTRYINDEX, runtime->tick_cb_ref);
+    if (lua_pcall(runtime->L, 0, 0, 0) != LUA_OK) {
+        log_lua_error(runtime->L, "定时回调失败");
+        clear_page_tick_callback();
+    }
+}
+
+static int l_app_on_tick(lua_State *L)
+{
+    lua_Integer interval = luaL_checkinteger(L, 1);
+    luaL_checktype(L, 2, LUA_TFUNCTION);
+    if (interval < 250 || interval > 60000) {
+        return luaL_argerror(L, 1, "定时间隔必须是 250..60000 毫秒");
+    }
+    clear_page_tick_callback();
+    lua_pushvalue(L, 2);
+    s_rt.tick_cb_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    s_rt.tick_timer = lv_timer_create(tick_timer_callback, (uint32_t)interval,
+                                      &s_rt);
+    if (!s_rt.tick_timer) {
+        clear_page_tick_callback();
+        return luaL_error(L, "定时器创建失败");
+    }
+    return 0;
+}
+
 static int l_link_send(lua_State *L)
 {
     const char *target_code = luaL_checkstring(L, 1);
@@ -348,7 +398,8 @@ static void register_passport_api(lua_State *L)
         {NULL, NULL},
     };
     static const luaL_Reg app[] = {
-        {"on_key", l_app_on_key}, {"on_message", l_app_on_message}, {NULL, NULL},
+        {"on_key", l_app_on_key}, {"on_message", l_app_on_message},
+        {"on_tick", l_app_on_tick}, {NULL, NULL},
     };
     static const luaL_Reg device[] = {{"code", l_device_code}, {NULL, NULL}};
     static const luaL_Reg link[] = {{"send", l_link_send}, {NULL, NULL}};
@@ -370,6 +421,7 @@ static void register_passport_api(lua_State *L)
     set_functions(L, app); lua_setfield(L, -2, "app");
     set_functions(L, device); lua_setfield(L, -2, "device");
     set_functions(L, link); lua_setfield(L, -2, "link");
+    passport_runtime_clock_register(L); lua_setfield(L, -2, "clock");
     passport_runtime_register_json(L); lua_setfield(L, -2, "json");
     passport_runtime_storage_register(L, &s_rt.storage);
     lua_setfield(L, -2, "storage");
@@ -412,6 +464,7 @@ esp_err_t passport_runtime_start(const passport_app_info_t *app)
     s_rt.heap.limit = LUA_HEAP_LIMIT;
     s_rt.key_cb_ref = LUA_NOREF;
     s_rt.message_cb_ref = LUA_NOREF;
+    s_rt.tick_cb_ref = LUA_NOREF;
     memcpy(s_rt.app_id, app->manifest.id, strlen(app->manifest.id) + 1U);
     memcpy(s_rt.app_root, app->root, strlen(app->root) + 1U);
     s_rt.ui.app_root = s_rt.app_root;
@@ -462,6 +515,7 @@ void passport_runtime_stop(void)
     }
     passport_runtime_storage_stop(&s_rt.storage);
     clear_page_key_callback();
+    clear_page_tick_callback();
     destroy_page();
     unref_routes();
     if (s_rt.message_cb_ref != LUA_NOREF) {

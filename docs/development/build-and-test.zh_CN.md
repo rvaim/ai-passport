@@ -20,7 +20,7 @@ idf.py fullclean              # 配置过期时清空生成状态（勿用于清
 
 固件门禁使用全新的临时构建目录，并从仓库 `sdkconfig.defaults` 生成隔离的 `sdkconfig`。它不会读取或覆盖开发者根目录的 `sdkconfig`，只把验证通过的合并镜像复制到 `build/FoloToy-AI-Passport-full.bin`。
 
-当前基线包含无需硬件即可运行的主机测试：Passport Link 帧编码/校验、原生输入导航策略、设置值与唤醒抑制状态机、网页安装器协议、`.pap` 打包格式、严格 Manifest/主题解析、使用真实 Lua 与 cJSON 源码的系统 JSON API，以及 UI 字库的 CMake 源码图/常用汉字字符集。网页协议测试要求 Node.js 18 或更高版本；基于 cJSON 的主机测试在激活 ESP-IDF 5.5.3 后运行。
+当前基线包含无需硬件即可运行的主机测试：Passport Link 帧编码/校验、原生输入导航策略、设置值与唤醒抑制状态机、网页安装与 TOTP 密钥发送协议、持久化 2FA PAP、`.pap` 打包格式、严格 Manifest/主题解析、使用真实 Lua 与 cJSON 源码的系统 JSON API，以及 UI 字库的 CMake 源码图/常用汉字字符集。网页协议测试要求 Node.js 18 或更高版本；基于 cJSON 的 Lua 主机测试在激活 ESP-IDF 5.5.3 后运行。
 
 ```bash
 cc -std=c11 -Wall -Wextra -Werror \
@@ -35,6 +35,7 @@ cc -std=c11 -Wall -Wextra -Werror \
   tests/test_passport_input_policy.c -o /tmp/test_passport_input_policy
 /tmp/test_passport_input_policy
 node tests/test_web_installer_protocol.mjs
+node tests/test_passport_totp_protocol.mjs
 node site/build.mjs --output /tmp/passport-site
 python3 tests/test_site_output.py /tmp/passport-site
 python3 tests/test_generate_ui_font.py

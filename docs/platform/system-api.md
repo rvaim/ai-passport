@@ -73,6 +73,18 @@ UP and DOWN double-clicks are delivered as `DOUBLE_CLICK`. Long-OK is reserved f
 
 The first completed key sequence after screen-off can be consumed solely to wake the display.
 
+## Time and page ticks
+
+`passport.app.on_tick(interval_ms, callback)` registers one repeating callback for the current route. The interval is an integer from 250 to 60,000 milliseconds. Registering again replaces the route's previous tick; changing routes, stopping the PAP, or raising an error in the callback removes it. Use it only for short UI refreshes, not blocking work.
+
+The generic volatile clock API is independent of TOTP or any other application protocol:
+
+- `passport.clock.sync(unix_seconds_string) -> ok, error` anchors a decimal Unix-seconds string to the monotonic hardware timer.
+- `passport.clock.valid() -> boolean` reports whether the powered firmware session has received a valid time.
+- `passport.clock.now() -> unix_seconds_string, error` returns the current Unix time as a decimal string.
+
+Strings avoid losing modern Unix timestamps in the runtime's 32-bit numeric ABI. Accepted values cover 2024-01-01 through 9999-12-31 UTC. The ESP32-C3 board has no battery-backed wall clock, so a reboot or power loss invalidates the clock; it must be synchronized again. While the firmware stays powered, the synchronized clock is shared across PAP launches.
+
 ## Data and device APIs
 
 - `passport.app.on_message(callback)` receives `(message, source_code)` for the foreground app namespace.
@@ -110,7 +122,7 @@ Paths are portable relative ASCII, at most 95 bytes and four segments. Absolute 
 
 Only one foreground Lua app runs at a time. It has an 80 KiB Lua heap limit, one eight-frame navigator, one visible LVGL page, at most 48 PAP-created LVGL objects, at most 32 KiB of dynamic UI buffers on that page, and two outstanding storage requests. Route changes destroy the old LVGL tree and call the destination render callback; hidden page trees are never retained.
 
-Registering `on_key` again replaces the current route's key callback. Route changes clear it, so each render callback should register the handler for that page. `on_message` is app-wide. The optional global `on_stop()` runs before the VM closes.
+Registering `on_key` or `on_tick` again replaces the current route's matching callback. Route changes clear both callbacks, so each render callback should register the handlers needed by that page. `on_message` is app-wide. The optional global `on_stop()` runs before the VM closes.
 
 Callbacks execute in the system UI task while the LVGL lock is held. Keep them non-blocking.
 

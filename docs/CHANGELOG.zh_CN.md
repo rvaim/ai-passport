@@ -6,7 +6,8 @@
 
 ## Unreleased
 
-- 将 GitHub Pages 精简为一个统一的 Web Bluetooth 安装器，用于选择本地插件或主题 `.pap`。网站不再展示包目录、内置 PAP、构建文档页面或提供独立主题入口。
+- 新增可安装、可持久化的“2FA 验证器”PAP。Base32、HMAC-SHA1、RFC 6238 TOTP、数据校验和账号私有存储全部保留在 PAP 内；固件只增加通用易失性时钟与路由级 tick 回调。GitHub Pages 现把共享且已复核的设备连接放在顶部，下面依次展示 Passport 安装器与明文 2FA 密钥发送工具；后者支持 `otpauth://totp`、同步浏览器时间，并等待 PAP 确认持久化写入成功。
+- 将 GitHub Pages 精简为一个统一的本地 Web Bluetooth 页面。网站不再展示包目录、内置 PAP、构建文档页面或提供独立主题入口。
 - 从 CI 移除自动 PAP 目录生成、包重新生成、生成文件提交与 PAP Release 资源。Release 现在只包含经过验证的固件与校验和；配对码输入框仍会在连接和安装前规范化为大写 `XXXXX-XXXXX-X`。
 - 新增 GitHub 官方 Pages 配置步骤，并把 Pages 部署升级到 v5。仓库 Pages 已使用 **GitHub Actions** 作为构建来源，部署只使用 `GITHUB_TOKEN`，不再依赖长期 PAT Secret。Pages 部署与固件发布相互独立，因此 Pages 失败不会阻断 BIN Release。
 - 移除定时上游同步工作流；fork 所有者现在通过 GitHub 的 **Sync fork** 或自选 Git 流程显式同步 `main`。

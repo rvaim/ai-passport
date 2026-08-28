@@ -33,6 +33,15 @@ The fixed header is 36 bytes:
 
 The system validates version, length, CRC, and target before delivering a frame to the current app namespace.
 
+Web Bluetooth clients write complete frames to Link RX and subscribe to Link TX for PAP responses:
+
+```text
+Link RX  01000000-0058-5254-524f-505353415031
+Link TX  01000000-0058-5454-524f-505353415031
+```
+
+The service field is the FNV-1a hash of the UTF-8 app manifest ID. Only the foreground app receives frames for its namespace.
+
 ## BLE package installation
 
 ```text
@@ -47,11 +56,12 @@ The little-endian begin control value is `op:u8=1 + total_size:u32 + crc32:u32 +
 
 NimBLE callbacks only copy bounded chunks into a fixed queue. The `pap_install` worker owns file writes, streaming CRC, package validation, and installation.
 
-The dependency-free [Web installer](../../web/installer.html) implements this flow. Serve `web/` from HTTPS or localhost, choose a `.pap`, and enter the pairing code in desktop Chrome or Edge. The browser picker discovers advertisements containing the Passport Service UUID; after connecting, the page reads the Device Code characteristic and requires the full code to match. Web Bluetooth requires an explicit browser authorization prompt the first time a site accesses a device; the page can reconnect a previously authorized matching device without opening the picker. The command-line alternative remains `tools/ble_install.py`.
+The dependency-free [shared Web tool](../../web/installer.html) implements this flow. Serve `web/` from HTTPS or localhost, enter the pairing code in desktop Chrome or Edge, and connect once. The browser picker discovers advertisements containing the Passport Service UUID; after connecting, the page reads the Device Code characteristic and requires the full code to match. The same verified GATT connection then supports local `.pap` installation and the 2FA provisioning flow documented in [2FA Authenticator PAP](totp-authenticator.md). Web Bluetooth requires an explicit browser authorization prompt the first time a site accesses a device; the page can reconnect a previously authorized matching device without opening the picker. The command-line installation alternative remains `tools/ble_install.py`.
 
 ## Security boundary
 
 - BLE system pairing and bonding are intentionally disabled.
 - The device code is public and must not be treated as a password.
 - V1 does not prevent eavesdropping or a malicious nearby writer; its target check only reduces accidental delivery to the wrong device.
+- Application secrets sent through Link, including TOTP seeds, are plaintext under this boundary.
 - Package Service still enforces size, CRC, manifest, and path-traversal constraints before committing files.
