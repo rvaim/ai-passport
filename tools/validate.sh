@@ -10,7 +10,9 @@ usage() {
 
 run_static_checks() {
     local actionlint_bin
+    local cjson_object
     local cjson_dir
+    local lua_object
     local lua_source
     local site_dir
     local test_dir
@@ -64,6 +66,14 @@ run_static_checks() {
         components/passport_core/src/passport_app_storage_model.c \
         -o "${test_dir}/test_passport_app_storage_model"
     "${test_dir}/test_passport_app_storage_model"
+
+    # Keep project sources warning-clean without promoting diagnostics from the
+    # locked third-party Lua amalgamation to project build failures.
+    lua_object="${test_dir}/onelua.o"
+    "${CC:-cc}" -std=c11 -O2 -Wall -Wextra \
+        -DMAKE_LIB -DLUA_32BITS=1 \
+        -Imanaged_components/espressif__lua/lua \
+        -c "${lua_source}" -o "${lua_object}"
     "${CC:-cc}" -std=c11 -O2 -Wall -Wextra -Werror \
         -DMAKE_LIB -DLUA_32BITS=1 \
         -Itests/host_stubs -Imanaged_components/espressif__lua/lua \
@@ -72,7 +82,7 @@ run_static_checks() {
         -Icomponents/passport_runtime/src \
         tests/test_passport_runtime_storage.c \
         components/passport_runtime/src/passport_runtime_storage.c \
-        managed_components/espressif__lua/lua/onelua.c \
+        "${lua_object}" \
         -lm -o "${test_dir}/test_passport_runtime_storage"
     "${test_dir}/test_passport_runtime_storage"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
@@ -89,6 +99,12 @@ run_static_checks() {
     "${test_dir}/test_passport_input_policy"
     cjson_dir="${IDF_PATH:-}/components/json/cJSON"
     if [[ -n "${IDF_PATH:-}" && -f "${cjson_dir}/cJSON.c" ]]; then
+        # cJSON is also an upstream dependency; compile it separately so
+        # -Werror remains scoped to repository-owned sources below.
+        cjson_object="${test_dir}/cJSON.o"
+        "${CC:-cc}" -std=c11 -O2 -Wall -Wextra \
+            -I"${cjson_dir}" \
+            -c "${cjson_dir}/cJSON.c" -o "${cjson_object}"
         "${CC:-cc}" -std=c11 -O2 -Wall -Wextra -Werror \
             -DMAKE_LIB -DLUA_32BITS=1 \
             -Imanaged_components/espressif__lua/lua \
@@ -97,8 +113,8 @@ run_static_checks() {
             tests/test_passport_runtime_json.c \
             components/passport_core/src/passport_text.c \
             components/passport_runtime/src/passport_runtime_json.c \
-            managed_components/espressif__lua/lua/onelua.c \
-            "${cjson_dir}/cJSON.c" -lm -o "${test_dir}/test_passport_runtime_json"
+            "${lua_object}" "${cjson_object}" \
+            -lm -o "${test_dir}/test_passport_runtime_json"
         "${test_dir}/test_passport_runtime_json" tests/test_passport_runtime_json.lua
         "${test_dir}/test_passport_runtime_json" \
             tests/test_agent_auth_plugin.lua examples/agent-auth-panel/main.lua
@@ -109,7 +125,7 @@ run_static_checks() {
             components/passport_core/src/passport_text.c \
             components/passport_core/src/passport_manifest.c \
             components/passport_core/src/passport_theme_parser.c \
-            "${cjson_dir}/cJSON.c" -o "${test_dir}/test_passport_manifest"
+            "${cjson_object}" -o "${test_dir}/test_passport_manifest"
         "${test_dir}/test_passport_manifest"
     else
         echo "Passport JSON/API, manifest, theme, and Agent plug-in host tests: NOT RUN (activate ESP-IDF 5.5.3)"
