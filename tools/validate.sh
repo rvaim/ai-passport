@@ -11,6 +11,7 @@ usage() {
 run_static_checks() {
     local actionlint_bin
     local cjson_dir
+    local site_dir
     local test_dir
 
     python3 tools/check_repo.py
@@ -26,6 +27,17 @@ run_static_checks() {
     "${actionlint_bin}" -color .github/workflows/*.yml
 
     test_dir="$(mktemp -d /tmp/ai-passport-host-tests.XXXXXX)"
+    site_dir="$(mktemp -d /tmp/ai-passport-site.XXXXXX)"
+    python3 tests/test_pap_catalog.py
+    python3 tools/build_pap_catalog.py --check \
+        --catalog "${test_dir}/pap-catalog.json" \
+        --packages-dir "${test_dir}/pap-packages"
+    npm ci --prefix site --ignore-scripts --no-audit --no-fund
+    node site/build.mjs --output "${site_dir}" \
+        --catalog "${test_dir}/pap-catalog.json" \
+        --packages "${test_dir}/pap-packages" \
+        --repository "rvaim/ai-passport" --ref main --release-tag latest
+    python3 tests/test_site_output.py "${site_dir}"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
         -Itests/host_stubs -Icomponents/passport_core/include -Icomponents/passport_link/include \
         tests/test_passport_link_protocol.c \
@@ -108,6 +120,7 @@ run_static_checks() {
     python3 tests/test_generate_ui_font.py
     python3 tests/test_pack_pap.py
     rm -rf "${test_dir}"
+    rm -rf "${site_dir}"
     echo "Host tests: PASS"
 }
 

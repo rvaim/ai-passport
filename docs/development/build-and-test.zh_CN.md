@@ -33,6 +33,11 @@ cc -std=c11 -Wall -Wextra -Werror \
   tests/test_passport_input_policy.c -o /tmp/test_passport_input_policy
 /tmp/test_passport_input_policy
 node tests/test_web_installer_protocol.mjs
+python3 tests/test_pap_catalog.py
+python3 tools/build_pap_catalog.py --check --prune --catalog /tmp/passport-catalog.json --packages-dir /tmp/passport-packages
+npm ci --prefix site --ignore-scripts --no-audit --no-fund
+node site/build.mjs --output /tmp/passport-site --catalog /tmp/passport-catalog.json --packages /tmp/passport-packages --repository rvaim/ai-passport --ref main --release-tag latest
+python3 tests/test_site_output.py /tmp/passport-site
 python3 tests/test_generate_ui_font.py
 python3 tests/test_pack_pap.py
 python3 tools/generate_ui_font.py --check

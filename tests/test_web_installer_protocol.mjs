@@ -8,6 +8,7 @@ import {
   formatDeviceCode,
   makeBeginControl,
   makeDeviceRequestOptions,
+  normalizeDeviceCodeInput,
   parseDeviceCode,
 } from "../web/passport-install-protocol.mjs";
 
@@ -19,6 +20,9 @@ for (const deviceId of [0n, 1n, 0x123456789abcn, 0xffffffffffffn]) {
 }
 
 assert.throws(() => parseDeviceCode("22222-22222-3"), /校验失败/);
+assert.equal(normalizeDeviceCodeInput("4e48r"), "4E48R");
+assert.equal(normalizeDeviceCodeInput("4e48r53gd6z"), "4E48R-53GD6-Z");
+assert.equal(normalizeDeviceCodeInput("4E48R---53GD6 Z-extra"), "4E48R-53GD6-Z");
 assert.equal(advertisedNameForDeviceCode("22222222222"), "Passport-22222-22222-2");
 assert.throws(() => advertisedNameForDeviceCode("22222-22222-3"), /校验失败/);
 assert.deepEqual(makeDeviceRequestOptions(), {

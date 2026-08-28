@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#d9edf5">
+  <meta name="site-root" content="./">
+  <title>AI Passport · 可安装插件平台</title>
+  <link rel="stylesheet" href="./assets/site.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="AI Passport 首页">
+      <span class="brand-mark" aria-hidden="true">P</span>
+      <span>AI Passport</span>
+    </a>
+    <nav class="site-nav" aria-label="主导航">
+      <a href="#top" data-i18n="nav_home">首页</a>
+      <a href="./docs/index.html" data-i18n="nav_docs">文档</a>
+      <a href="#plugins" data-i18n="nav_plugins">插件</a>
+      <a href="#themes" data-i18n="nav_themes">主题</a>
+      <a href="https://github.com/rvaim/ai-passport" target="_blank" rel="noreferrer">GitHub</a>
+      <button class="language-link" id="language-toggle" type="button">English</button>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero section-wrap">
+      <div class="hero-copy">
+        <p class="eyebrow">FoloToy · PASSPORT PLATFORM</p>
+        <h1 data-i18n-html="hero_title">把小设备变成<br><span>可安装的 AI 平台</span></h1>
+        <p class="hero-lede" data-i18n="hero_lede">面向 ESP32-C3 的轻量插件系统。统一的 UI、主题、BLE 安装和 Lua API，让设备能力可以被安全地扩展。</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#plugins" data-i18n="browse_plugins">浏览插件</a>
+          <a class="button secondary" href="./docs/index.html" data-i18n="read_docs">阅读文档</a>
+        </div>
+      </div>
+      <div class="hero-device" aria-label="Passport hardware summary">
+        <div class="device-screen">
+          <span class="device-status">PASSPORT READY</span>
+          <strong>一台设备<br>多种可能</strong>
+          <span class="device-line"></span>
+          <small>BLE · LUA · LVGL</small>
+        </div>
+        <span class="device-button button-up"></span>
+        <span class="device-button button-ok"></span>
+        <span class="device-button button-down"></span>
+      </div>
+    </section>
+
+    <section class="fact-grid section-wrap" aria-label="硬件能力">
+      <div class="fact"><strong>ESP32-C3</strong><span data-i18n="fact_chip">单核 RISC-V</span></div>
+      <div class="fact"><strong>8 MB</strong><span data-i18n="fact_flash">Flash 存储</span></div>
+      <div class="fact"><strong>240×320</strong><span data-i18n="fact_display">RGB565 显示</span></div>
+      <div class="fact"><strong>Lua + LVGL</strong><span data-i18n="fact_runtime">受限运行时</span></div>
+    </section>
+
+    <section class="intro section-wrap">
+      <div class="section-heading">
+        <p class="eyebrow" data-i18n="section_platform">PLATFORM</p>
+        <h2 data-i18n="platform_title">系统服务固定边界，插件自由组合</h2>
+      </div>
+      <div class="feature-grid">
+        <article class="feature-card"><span class="feature-index">01</span><h3 data-i18n="feature_ui_title">继承式 UI</h3><p data-i18n="feature_ui_body">所有组件共享主题样式和系统字体，插件只声明语义，不复制整套视觉属性。</p></article>
+        <article class="feature-card"><span class="feature-index">02</span><h3 data-i18n="feature_storage_title">私有持久化</h3><p data-i18n="feature_storage_body">每个 PAP 拥有隔离的数据空间，异步写入，卸载时一并清理。</p></article>
+        <article class="feature-card"><span class="feature-index">03</span><h3 data-i18n="feature_install_title">BLE 安装</h3><p data-i18n="feature_install_body">浏览器校验设备码后传输 PAP，包校验、进度和设备结果都清晰可见。</p></article>
+      </div>
+    </section>
+
+    <section class="collection section-wrap" id="plugins">
+      <div class="section-heading collection-heading">
+        <div><p class="eyebrow" data-i18n="section_plugins">PLUGIN LIBRARY</p><h2 data-i18n="plugins_title">插件</h2></div>
+        <span class="collection-count" id="plugin-count">—</span>
+      </div>
+      <p class="section-lede" data-i18n="plugins_lede">从仓库中的 Manifest 和 README 自动生成。选择一个插件即可进入安装。</p>
+      <div class="package-grid" id="plugin-list" aria-live="polite"><p class="loading" data-i18n="loading">正在读取仓库目录…</p></div>
+    </section>
+
+    <section class="collection section-wrap" id="themes">
+      <div class="section-heading collection-heading">
+        <div><p class="eyebrow" data-i18n="section_themes">THEME LIBRARY</p><h2 data-i18n="themes_title">主题</h2></div>
+        <span class="collection-count" id="theme-count">—</span>
+      </div>
+      <p class="section-lede" data-i18n="themes_lede">主题只覆盖公共样式，不执行代码。切换主题后，系统和插件组件一起变化。</p>
+      <div class="package-grid" id="theme-list" aria-live="polite"><p class="loading" data-i18n="loading">正在读取仓库目录…</p></div>
+    </section>
+
+    <section class="install-note section-wrap">
+      <div><p class="eyebrow" data-i18n="section_install">INSTALL</p><h2 data-i18n="install_title">准备好设备配对码，就可以开始</h2><p data-i18n="install_body">安装页运行在浏览器本地，插件包不会上传。首次连接需要桌面版 Chrome 或 Edge 授权 Web Bluetooth。</p></div>
+      <a class="button secondary" href="./tools/installer/installer.html" data-i18n="open_installer">打开安装页</a>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <span>FoloToy AI Passport · ESP32-C3 / ESP-IDF 5.5.3</span>
+    <span data-i18n="footer_note">开源硬件与可安装软件平台</span>
+  </footer>
+
+  <script type="module" src="./assets/site.mjs"></script>
+</body>
+</html>

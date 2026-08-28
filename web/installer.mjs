@@ -12,6 +12,7 @@ import {
   formatDeviceCode,
   makeBeginControl,
   makeDeviceRequestOptions,
+  normalizeDeviceCodeInput,
   parseDeviceCode,
 } from "./passport-install-protocol.mjs";
 
@@ -117,6 +118,21 @@ function selectPackage(file) {
     setStatus("error", "无法使用这个文件", error.message);
   }
   updateControls();
+}
+
+async function loadPackageFromQuery() {
+  const packagePath = new URLSearchParams(window.location.search).get("package");
+  if (!packagePath) return;
+  const packageUrl = new URL(packagePath, document.baseURI);
+  if (packageUrl.origin !== window.location.origin || !packageUrl.pathname.endsWith(".pap")) {
+    throw new Error("安装包地址无效");
+  }
+  const response = await fetch(packageUrl, { cache: "no-store" });
+  if (!response.ok) throw new Error(`安装包读取失败（HTTP ${response.status}）`);
+  const blob = await response.blob();
+  const encodedName = packageUrl.pathname.split("/").pop() || "package.pap";
+  const name = decodeURIComponent(encodedName);
+  selectPackage(new File([blob], name, { type: "application/octet-stream" }));
 }
 
 function settleStatusWaiters(error) {
@@ -359,7 +375,15 @@ fileTask.addEventListener("drop", (event) => {
 });
 
 pairingInput.addEventListener("input", () => {
-  pairingInput.value = pairingInput.value.toUpperCase();
+  const before = pairingInput.value;
+  const caret = pairingInput.selectionStart ?? before.length;
+  const compactCaret = before.slice(0, caret).replace(/[-\s]/g, "").length;
+  pairingInput.value = normalizeDeviceCodeInput(before);
+  const formattedCaret = Math.min(
+    pairingInput.value.length,
+    compactCaret + (compactCaret > 5 ? 1 : 0) + (compactCaret > 10 ? 1 : 0),
+  );
+  pairingInput.setSelectionRange(formattedCaret, formattedCaret);
   pairingInput.setAttribute("aria-invalid", "false");
   if (selectedDevice?.gatt?.connected) {
     selectedDevice.removeEventListener("gattserverdisconnected", onDisconnected);
@@ -427,3 +451,7 @@ if (!window.isSecureContext) {
 } else {
   updateControls();
 }
+
+loadPackageFromQuery().catch((error) => {
+  setStatus("error", "无法读取安装包", error.message);
+});

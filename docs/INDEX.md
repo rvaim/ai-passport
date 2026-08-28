@@ -19,7 +19,7 @@ Use this page to discover repository documentation. `authoritative` documents de
 | [development/build-and-test.md](development/build-and-test.md) | Build and validation commands | authoritative |
 | [development/coding-conventions.md](development/coding-conventions.md) | C and firmware conventions | authoritative |
 | [development/CI-validation.md](development/CI-validation.md) | Pull-request and main-branch validation | authoritative |
-| [development/CI-build-and-release.md](development/CI-build-and-release.md) | Tagged firmware builds and releases | authoritative |
+| [development/CI-build-and-release.md](development/CI-build-and-release.md) | PAP/firmware releases and GitHub Pages deployment | authoritative |
 | [development/CI-sync-main.md](development/CI-sync-main.md) | Fork upstream synchronization | authoritative |
 | [fork-guide.md](fork-guide.md) | Fork branch and documentation workflow | authoritative |
 | [hardware-design/README.md](hardware-design/README.md) | Hardware-document index | reference |

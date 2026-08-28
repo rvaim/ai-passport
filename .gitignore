@@ -2,6 +2,8 @@ build/
 sdkconfig
 sdkconfig.old
 managed_components/
+site/node_modules/
+site-dist/
 __pycache__/
 *.py[cod]
 .vscode/

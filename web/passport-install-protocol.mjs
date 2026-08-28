@@ -10,6 +10,16 @@ export const PACKAGE_CHUNK_SIZE = 180;
 const DEVICE_ID_MAX = 0xffffffffffffn;
 const DEVICE_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 
+export function normalizeDeviceCodeInput(value) {
+  const compact = String(value ?? "")
+    .toUpperCase()
+    .replace(/[-\s]/g, "")
+    .slice(0, 11);
+  return [compact.slice(0, 5), compact.slice(5, 10), compact.slice(10, 11)]
+    .filter(Boolean)
+    .join("-");
+}
+
 export function formatDeviceCode(deviceId) {
   if (typeof deviceId !== "bigint" || deviceId < 0n || deviceId > DEVICE_ID_MAX) {
     throw new RangeError("设备标识超出 48 位范围");
