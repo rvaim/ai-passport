@@ -28,15 +28,7 @@ run_static_checks() {
 
     test_dir="$(mktemp -d /tmp/ai-passport-host-tests.XXXXXX)"
     site_dir="$(mktemp -d /tmp/ai-passport-site.XXXXXX)"
-    python3 tests/test_pap_catalog.py
-    python3 tools/build_pap_catalog.py --check \
-        --catalog "${test_dir}/pap-catalog.json" \
-        --packages-dir "${test_dir}/pap-packages"
-    npm ci --prefix site --ignore-scripts --no-audit --no-fund
-    node site/build.mjs --output "${site_dir}" \
-        --catalog "${test_dir}/pap-catalog.json" \
-        --packages "${test_dir}/pap-packages" \
-        --repository "rvaim/ai-passport" --ref main --release-tag latest
+    node site/build.mjs --output "${site_dir}"
     python3 tests/test_site_output.py "${site_dir}"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
         -Itests/host_stubs -Icomponents/passport_core/include -Icomponents/passport_link/include \

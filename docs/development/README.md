@@ -12,5 +12,4 @@ This directory contains AI Passport engineering rules and reusable workflows. Ru
 - [build-and-test.md](build-and-test.md): ESP-IDF build and validation.
 - [coding-conventions.md](coding-conventions.md): source-code and resource conventions.
 - [CI-validation.md](CI-validation.md): pull-request and main-branch checks.
-- [CI-build-and-release.md](CI-build-and-release.md): PAP/firmware releases and GitHub Pages deployment.
-- [CI-sync-main.md](CI-sync-main.md): upstream synchronization for forks.
+- [CI-build-and-release.md](CI-build-and-release.md): firmware releases and installer-only GitHub Pages deployment.

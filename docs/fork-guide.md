@@ -22,10 +22,9 @@ The root `README.md` path is intentionally available to a fork owner. Upstream's
 
 ## Fork rules
 
-- Keep fork `main` synchronized with `FoloToy/ai-passport:main`.
+- Keep fork `main` synchronized manually with `FoloToy/ai-passport:main`, using GitHub's **Sync fork** control or an explicit Git fetch/merge workflow before starting feature work.
 - On fork `main`, limit fork-owned content to a root `README.md` pair and `docs/assets/`; develop firmware and other changes on `feature/*` branches and merge by pull request.
-- Enable GitHub Actions manually after forking. The upstream-sync workflow is disabled by GitHub until the fork owner enables it.
-- If development must happen directly on `main`, disable `.github/workflows/sync-main.yml` first to prevent automatic merge conflicts.
+- Enable the validation and publishing GitHub Actions manually after forking when the fork needs them. This repository does not include an automatic upstream-sync workflow.
 
 Use `docs/assets/` for architecture notes, product design, and images that supplement a fork's README. Upstream keeps that directory empty except for `.gitkeep`; fork-private content must not be proposed back to upstream.
 

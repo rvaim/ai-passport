@@ -28,7 +28,7 @@ examples/agent-auth-panel/    “Agent 授权面板”示例插件
 examples/themes/night/        “夜间主题”示例
 tools/                        .pap 打包/检查、BLE 安装、验证工具
 web/                          本地 Web Bluetooth .pap 安装器
-site/                         GitHub Pages 源码与静态站点构建器
+site/                         仅安装器 GitHub Pages 构建器
 docs/platform/                架构、插件/API/协议/包格式/主题/迁移文档
 ```
 
@@ -50,7 +50,7 @@ docs/platform/                架构、插件/API/协议/包格式/主题/迁移
 
 `.pap` 是顺序、可流式处理的插件/主题包。系统通过 BLE 接收后先验证目标设备码、包头、Manifest、路径和 CRC，再写入 staging，成功后提交到 `/passport/apps/<id>` 或 `/passport/themes/<id>`。
 
-无外部依赖的[网页安装器](../web/installer.html)支持桌面版 Chrome 或 Edge 选择 `.pap`、输入设备配对码、精确匹配对应的 BLE 广播、通过 GATT 再次复核设备码并显示实时安装进度。浏览器首次使用时会强制要求一次设备授权确认；以后可直接重连已授权且配对码相符的 Passport，不再出现设备列表。页面必须通过 HTTPS 或 localhost 提供；本地启动方式和完整交互状态见[设计说明](../web/DESIGN.zh_CN.md)。公开的 [GitHub Pages 网站](https://rvaim.github.io/ai-passport/)从仓库目录构建，包含同源的生成包，并会为安装器预选对应插件。
+无外部依赖的[网页安装器](../web/installer.html)支持桌面版 Chrome 或 Edge 输入设备配对码、选择本地插件或主题 `.pap`、精确匹配对应的 BLE 广播、通过 GATT 再次复核设备码并显示实时安装进度。浏览器首次使用时会强制要求一次设备授权确认；以后可直接重连已授权且配对码相符的 Passport，不再出现设备列表。页面必须通过 HTTPS 或 localhost 提供；本地启动方式和完整交互状态见[设计说明](../web/DESIGN.zh_CN.md)。公开的 [GitHub Pages 网站](https://rvaim.github.io/ai-passport/)直接部署同一个统一安装器，不再发布包目录或内置 PAP 文件。
 
 插件使用系统页面容器，例如：
 

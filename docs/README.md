@@ -28,7 +28,7 @@ examples/agent-auth-panel/    Agent authorization panel plug-in
 examples/themes/night/        lightweight night-theme example
 tools/                        package, inspection, BLE install, and validation tools
 web/                          local Web Bluetooth .pap installer
-site/                         GitHub Pages source and static site builder
+site/                         installer-only GitHub Pages builder
 docs/platform/                architecture/API/protocol/package/theme/migration docs
 ```
 
@@ -50,7 +50,7 @@ Board constants remain exclusively in [`components/bsp/include/bsp_pins.h`](../c
 
 `.pap` is a sequential streaming package for apps and themes. BLE installation verifies the target device code, package header, manifest, paths, and CRC, writes into staging, then commits to `/passport/apps/<id>` or `/passport/themes/<id>`.
 
-The dependency-free [web installer](../web/installer.html) lets desktop Chrome or Edge choose a `.pap`, enter the device pairing code, match its exact BLE advertisement, verify the code again over GATT, and install with live progress. The browser requires one explicit device-authorization confirmation on first use; a previously authorized matching Passport reconnects without the device picker. Serve `web/` from HTTPS or localhost; local instructions and interaction states are documented in [its design note](../web/DESIGN.md). The public [GitHub Pages site](https://rvaim.github.io/ai-passport/) is built from the repository catalog, includes the same-origin generated packages, and opens this installer with the selected package preloaded.
+The dependency-free [web installer](../web/installer.html) lets desktop Chrome or Edge enter the device pairing code, choose a local plug-in or theme `.pap`, match its exact BLE advertisement, verify the code again over GATT, and install with live progress. The browser requires one explicit device-authorization confirmation on first use; a previously authorized matching Passport reconnects without the device picker. Serve `web/` from HTTPS or localhost; local instructions and interaction states are documented in [its design note](../web/DESIGN.md). The public [GitHub Pages site](https://rvaim.github.io/ai-passport/) deploys this same unified installer as its root page and does not publish a package catalog or bundled PAP files.
 
 The system owns the status bar, content rectangle, action-hint bar, navigation, font, and inherited public styles. PAPs provide only the short-OK action noun; long-OK pops the current route and exits to the launcher only from the root. Key callbacks use integer enums, and `passport.input.supports_chords` is false because the current buttons share one ADC ladder. See the [plug-in development guide](platform/plugin-development.md) for a complete API example.
 

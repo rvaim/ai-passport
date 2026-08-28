@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#d9edf5">
-  <title>Passport 插件安装</title>
+  <title>Passport 安装器</title>
+  <link rel="icon" href="data:,">
   <style>
     :root {
       color-scheme: light;
@@ -140,17 +141,10 @@
       width: 100%;
     }
 
-    .pairing-actions {
-      display: flex;
-      align-items: stretch;
-      gap: 10px;
-      margin-top: 14px;
-    }
-
     .pairing-input {
-      min-width: 0;
+      width: 100%;
       min-height: 44px;
-      flex: 1 1 220px;
+      margin-top: 14px;
       border: 1px solid #6f8089;
       border-radius: 12px;
       padding: 0 14px;
@@ -274,6 +268,14 @@
 
     .install-button { width: 100%; min-height: 50px; }
 
+    .install-actions {
+      display: grid;
+      grid-template-columns: minmax(150px, .42fr) minmax(0, 1fr);
+      gap: 10px;
+    }
+
+    .install-actions .button { min-height: 50px; }
+
     .status {
       display: flex;
       gap: 11px;
@@ -340,8 +342,7 @@
       .task { grid-template-columns: 1fr; padding: 19px; }
       .button,
       .file-button { width: 100%; }
-      .pairing-actions { flex-direction: column; }
-      .pairing-input { width: 100%; flex-basis: auto; }
+      .install-actions { grid-template-columns: 1fr; }
       .install-area,
       .status { padding-right: 19px; padding-left: 19px; }
     }
@@ -354,10 +355,10 @@
 </head>
 <body>
   <!--
-  THESIS: A quiet, direct local installer that makes the file, target device, and transfer state unmistakable.
+  THESIS: A quiet, direct local installer shared by Passport plug-ins and themes.
   OWN-WORLD: Passport's light blue field, dark ink, compact blue controls, and crisp bordered utility surface.
-  STORY: Choose a valid package, enter the device pairing code, then watch one bounded transfer complete.
-  FIRST VIEWPORT: Identity, package selection, pairing-code targeting, install readiness, and live status all remain visible.
+  STORY: Enter the pairing code, choose one PAP package, connect the target, and complete one bounded transfer.
+  FIRST VIEWPORT: Pairing-code targeting, package selection, connection, install readiness, and live status remain visible.
   FORM: Linear installer console; concept 1/1; seed key passport-install-linear-v1.
   FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
   -->
@@ -369,31 +370,14 @@
         </svg>
       </span>
       <div>
-        <h1>Passport 插件安装</h1>
-        <p>插件只在浏览器与设备之间传输，不会上传到互联网。</p>
+        <h1>Passport 安装器</h1>
+        <p>插件和主题只在浏览器与设备之间传输，不会上传到互联网。</p>
       </div>
     </header>
 
-    <noscript>需要启用 JavaScript 才能连接设备并安装插件。</noscript>
+    <noscript>需要启用 JavaScript 才能连接设备并安装插件或主题。</noscript>
 
-    <section class="installer" aria-label="插件安装流程">
-      <div class="task file-task" id="file-task">
-        <div class="task-copy">
-          <span class="task-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
-              <path d="M14 2v6h6M8 14h8M8 18h5"/>
-            </svg>
-          </span>
-          <div>
-            <h2>选择插件包</h2>
-            <p id="file-detail">请选择不超过 4 MB 的 <span class="file-name">.pap</span> 文件，也可以拖到这里。</p>
-          </div>
-        </div>
-        <input id="package-file" type="file" accept=".pap,application/octet-stream" hidden>
-        <button class="file-button" id="file-button" type="button">选择文件</button>
-      </div>
-
+    <section class="installer" aria-label="PAP 安装流程">
       <div class="task device-task">
         <div class="task-copy">
           <span class="task-icon" aria-hidden="true">
@@ -404,32 +388,49 @@
           <div class="task-body">
             <h2>输入设备配对码</h2>
             <p>在 Passport 的“设置 → 设备信息”或“插件管理”页查看；输入时会自动大写并添加横杠。</p>
-            <div class="pairing-actions">
-              <label class="visually-hidden" for="pairing-code">设备配对码</label>
-              <input class="pairing-input" id="pairing-code" type="text" inputmode="text"
-                autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="13"
-                placeholder="XXXXX-XXXXX-X" aria-describedby="device-detail" aria-invalid="false">
-              <button class="button secondary" id="connect-button" type="button">连接设备</button>
-            </div>
-            <p class="field-note" id="device-detail">浏览器先显示附近的 Passport，连接后会用配对码核对目标设备。</p>
+            <label class="visually-hidden" for="pairing-code">设备配对码</label>
+            <input class="pairing-input" id="pairing-code" type="text" inputmode="text"
+              autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="13"
+              placeholder="XXXXX-XXXXX-X" aria-describedby="device-detail" aria-invalid="false">
+            <p class="field-note" id="device-detail">输入完整配对码后，再选择要安装的插件或主题。</p>
           </div>
         </div>
       </div>
 
+      <div class="task file-task" id="file-task">
+        <div class="task-copy">
+          <span class="task-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+              <path d="M14 2v6h6M8 14h8M8 18h5"/>
+            </svg>
+          </span>
+          <div>
+            <h2>选择插件或主题</h2>
+            <p id="file-detail">请选择不超过 4 MB 的 <span class="file-name">.pap</span> 安装包，也可以拖到这里。</p>
+          </div>
+        </div>
+        <input id="package-file" type="file" accept=".pap,application/octet-stream" hidden>
+        <button class="file-button" id="file-button" type="button">选择文件</button>
+      </div>
+
       <div class="install-area">
         <div class="progress-row">
-          <span id="progress-label">等待文件和设备</span>
+          <span id="progress-label">等待配对码和安装包</span>
           <span id="progress-value">0%</span>
         </div>
         <progress id="progress" max="1" value="0">0%</progress>
-        <button class="button install-button" id="install-button" type="button" disabled>安装到设备</button>
+        <div class="install-actions">
+          <button class="button secondary" id="connect-button" type="button" disabled>连接设备</button>
+          <button class="button install-button" id="install-button" type="button" disabled>安装到设备</button>
+        </div>
       </div>
 
       <div class="status" id="status" data-kind="idle" role="status" aria-live="polite" aria-atomic="true">
         <span class="status-dot" aria-hidden="true"></span>
         <div>
           <strong id="status-title">尚未准备好</strong>
-          <p id="status-detail">选择插件包并连接 Passport 后即可安装。</p>
+          <p id="status-detail">输入配对码、选择 .pap 安装包并连接 Passport 后即可安装。</p>
         </div>
       </div>
     </section>

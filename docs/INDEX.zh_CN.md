@@ -19,9 +19,8 @@
 | [development/build-and-test.zh_CN.md](./development/build-and-test.zh_CN.md) | 工程规范 | authoritative | 构建与验证（ESP-IDF 命令、逻辑测试、改动验证要求） |
 | [development/coding-conventions.zh_CN.md](./development/coding-conventions.zh_CN.md) | 工程规范 | authoritative | 代码约定（语言风格、复用、注释、测试同步、资源约束） |
 | [development/agent-guide.zh_CN.md](./development/agent-guide.zh_CN.md) | 工程规范 | authoritative | AI 开发工作流（上下文建立、需求拆解、BSP 边界、验收交付格式） |
-| [development/CI-build-and-release.zh_CN.md](./development/CI-build-and-release.zh_CN.md) | CI 文档 | authoritative | PAP、固件 Release 与 GitHub Pages 自动构建发布 |
+| [development/CI-build-and-release.zh_CN.md](./development/CI-build-and-release.zh_CN.md) | CI 文档 | authoritative | 固件 Release 与仅安装器 GitHub Pages 自动部署 |
 | [development/CI-validation.zh_CN.md](./development/CI-validation.zh_CN.md) | CI 文档 | authoritative | PR/main 自动仓库检查、host tests 与固件验证 |
-| [development/CI-sync-main.zh_CN.md](./development/CI-sync-main.zh_CN.md) | CI 文档 | authoritative | 上游同步说明（定期同步上游 main 到 fork） |
 | [fork-guide.zh_CN.md](./fork-guide.zh_CN.md) | fork 工作流 | authoritative | 目录结构、main 保持干净、fork 约定、docs/assets 使用 |
 | [software-design/README.zh_CN.md](./software-design/README.zh_CN.md) | 软件设计索引 | 参考 | 软件设计文档子目录骨架 |
 | [hardware-design/README.zh_CN.md](./hardware-design/README.zh_CN.md) | 硬件设计索引 | 参考 | 硬件设计文档子目录骨架 |

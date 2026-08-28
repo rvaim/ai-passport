@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Check the generated Pages tree has consistent package and document links."""
+"""Check that GitHub Pages contains only the unified local PAP installer."""
 
 from __future__ import annotations
 
-import json
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
@@ -13,41 +12,52 @@ from urllib.parse import urlsplit
 output = Path(sys.argv[1]).resolve()
 
 
-class LocalLinkChecker(HTMLParser):
+class InstallerParser(HTMLParser):
     def __init__(self, source: Path) -> None:
         super().__init__()
         self.source = source
+        self.ids: set[str] = set()
 
     def handle_starttag(self, _tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        for name, value in attrs:
-            if name != "href" or not value:
+        values = dict(attrs)
+        element_id = values.get("id")
+        if element_id:
+            self.ids.add(element_id)
+        for name in ("href", "src"):
+            value = values.get(name)
+            if not value:
                 continue
             parsed = urlsplit(value)
             if parsed.scheme or parsed.netloc or not parsed.path:
                 continue
             target = (self.source.parent / parsed.path).resolve()
-            assert target.is_file(), f"broken local link: {self.source} -> {value}"
+            assert target.is_file(), f"broken local resource: {self.source} -> {value}"
 
 
-for source in output.rglob("*.html"):
-    LocalLinkChecker(source).feed(source.read_text(encoding="utf-8"))
+expected_files = {
+    ".nojekyll",
+    "index.html",
+    "installer.mjs",
+    "passport-install-protocol.mjs",
+}
+actual_files = {
+    path.relative_to(output).as_posix()
+    for path in output.rglob("*")
+    if path.is_file()
+}
+assert actual_files == expected_files, actual_files
 
-catalog = json.loads((output / "data" / "catalog.json").read_text(encoding="utf-8"))
-assert catalog["schema"] == 1
-assert catalog["packages"]
-assert (output / ".nojekyll").is_file()
-assert (output / "index.html").is_file()
-assert (output / "docs" / "index.html").is_file()
-assert (output / "tools" / "installer" / "installer.html").is_file()
-assert (output / "tools" / "installer" / "passport-install-protocol.mjs").is_file()
+index = output / "index.html"
+parser = InstallerParser(index)
+parser.feed(index.read_text(encoding="utf-8"))
+assert {
+    "pairing-code",
+    "package-file",
+    "connect-button",
+    "install-button",
+} <= parser.ids
 
-for item in catalog["packages"]:
-    package_path = output / item["package_url"].removeprefix("./")
-    install_path = output / item["install_url"].split("?", 1)[0].removeprefix("./")
-    assert package_path.is_file()
-    assert install_path.is_file()
-    assert item["release_url"].endswith(item["asset"])
-
-assert (output / "docs" / "platform" / "architecture.html").is_file()
-assert (output / "docs" / "platform" / "architecture.zh_CN.html").is_file()
+script = (output / "installer.mjs").read_text(encoding="utf-8")
+assert "catalog.json" not in script
+assert "URLSearchParams" not in script
 print("Site output host tests: PASS")

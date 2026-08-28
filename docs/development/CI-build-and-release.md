@@ -2,64 +2,35 @@
   <a href="CI-build-and-release.zh_CN.md">简体中文</a> · <strong>English</strong>
 </p>
 
-# Automated Build, Package, Release, and Pages
+# Automated Build, Firmware Release, and Pages Deployment
 
-`.github/workflows/pipeline.yml` is the single publishing workflow. It checks
-pull requests, rebuilds every repository PAP, commits generated `dist/*.pap`
-files on `main`, builds the ESP32-C3 firmware, publishes packages and firmware,
-and deploys the static GitHub Pages site.
+`.github/workflows/pipeline.yml` is the single validation and publishing workflow. It checks the repository and host behavior, builds the ESP32-C3 firmware, publishes firmware releases, and deploys one unified Web Bluetooth installer to GitHub Pages. The workflow does not rebuild, catalog, commit, or publish repository PAP files.
 
 ## Triggers
 
-- **Pull request**: validates the current PAP outputs, site catalog, web
-  installer, repository rules, and host tests; no write or release permission is
-  granted.
-- **Push to `main`**: rebuilds PAPs, updates only changed generated files in
-  their source directories, publishes the rolling `latest` prerelease, and
-  deploys Pages.
-- **Push of a `v*` tag**: rebuilds PAPs and publishes an immutable versioned
-  Release with the firmware, every plugin/theme package, catalog, and checksums.
-- **Manual dispatch**: runs the same publication path for the selected ref.
+- **Pull request:** runs repository, host, installer-output, and firmware checks without write or release permission.
+- **Push to `main`:** runs the same checks, refreshes the rolling `latest` firmware prerelease, and deploys Pages.
+- **Push of a `v*` tag:** runs the same checks and publishes an immutable versioned firmware Release before deploying Pages.
+- **Manual dispatch:** runs the publication path for the selected ref.
 
 ## Pipeline
 
-1. The package job scans `examples/**/manifest.json`, validates the exact
-   current schema, regenerates each package with `tools/pack_pap.py`, rejects
-   stale or duplicate outputs, and writes a deterministic catalog. On `main`, a
-   separate least-privilege job commits only generated `dist/*.pap` changes with
-   `github-actions[bot]` and pushes them back to `main` after static and firmware
-   checks pass. The bot token does not recursively start another workflow.
-2. The static job restores the generated PAPs into the checkout, runs
-   `./tools/validate.sh --static`, builds the site in a temporary directory, and
-   verifies package, documentation, and installer links.
-3. The firmware job runs `./tools/validate.sh --firmware` with ESP-IDF 5.5.3 for
-   ESP32-C3 and uploads the verified merged image.
-4. The publish job creates or refreshes `latest` for branch builds, or creates a
-   versioned Release for a tag. It uploads `FoloToy-AI-Passport-full.bin`, all
-   `.pap` assets, `catalog.json`, and `SHA256SUMS`.
-5. The same build copies the generated packages into the Pages artifact. The
-   site reads its same-origin `data/catalog.json` and package files, so its
-   install links cannot depend on GitHub API directory listings or cross-origin
-   redirects.
+1. The static job runs `./tools/validate.sh --static`. The shared gate checks repository rules, host behavior, the `.pap` packer, Web Bluetooth protocol helpers, and the exact installer-only Pages output.
+2. The firmware job runs `./tools/validate.sh --firmware` with ESP-IDF 5.5.3 for ESP32-C3, verifies the merged image, and uploads it as an internal workflow artifact.
+3. For non-PR events, the release job creates or refreshes `latest`, or creates the version-tag Release. Releases contain only `FoloToy-AI-Passport-full.bin` and `SHA256SUMS`.
+4. In parallel, the Pages job uses GitHub's `actions/configure-pages` to read or enable the Pages site, builds the dependency-free artifact directly from `web/installer.html`, `web/installer.mjs`, and `web/passport-install-protocol.mjs`, and uploads it.
+5. The deploy job publishes the uploaded artifact through GitHub Pages. Pages configuration and firmware publication are separate jobs, so a Pages setup failure does not block the BIN Release.
 
-All Actions are pinned to full commit SHAs. Read-only checks run with
-`contents: read`; only the generated-output commit and Release job receive
-`contents: write`; Pages deployment uses the dedicated `pages` and OIDC
-permissions. In repository settings, set Pages → Build and deployment → Source
-to **GitHub Actions** once before the first deployment.
+All Actions are pinned to full commit SHAs. Validation uses `contents: read`; only the firmware Release job receives `contents: write`; Pages configuration and deployment use the dedicated `pages` and OIDC permissions.
 
-## Generated outputs
+## Pages enablement
 
-The checked-in `examples/**/dist/*.pap` files are release artifacts produced from
-their neighboring source directories. Do not edit them by hand. Running
-`python3 tools/build_pap_catalog.py --check` verifies that they match the current
-Manifest and payload; the workflow uses `--write --prune` before committing
-changed outputs.
+An existing Pages site needs no extra credential: the workflow reads its configuration with `GITHUB_TOKEN` and deploys through GitHub Actions. To let a fresh repository or fork enable Pages automatically, add a repository Actions secret named `PAGES_TOKEN` containing a token with Pages write permission. GitHub does not allow the workflow's generated `GITHUB_TOKEN` to create a Pages site. If this secret is intentionally omitted, enable Pages once in repository settings and choose **GitHub Actions** as the build source.
 
-The public site is available at
-`https://rvaim.github.io/ai-passport/` after Pages is enabled. Its plugin/theme
-cards use the generated catalog and open the existing Web Bluetooth installer
-with the selected package preloaded. Browser-side installation still requires a
-secure context and desktop Chrome or Edge.
+## PAP and Pages boundary
+
+Repository example PAPs are developer-maintained outputs produced explicitly with `tools/pack_pap.py`; CI no longer regenerates or commits `examples/**/dist/*.pap`, and Releases no longer contain PAP files or a package catalog.
+
+The public site is available at `https://rvaim.github.io/ai-passport/` after Pages is enabled. It contains only the shared installer: enter the public pairing code, choose a local `.pap` plug-in or theme, connect the matching Passport, and install. The selected file stays in the browser and is never uploaded. Web Bluetooth requires a secure context and desktop Chrome or Edge.
 
 For board and flashing details, see [the hardware development guide](../hardware-design/AI_HARDWARE_DEVELOPMENT_GUIDE.md).

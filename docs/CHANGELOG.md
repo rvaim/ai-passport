@@ -6,8 +6,10 @@
 
 ## Unreleased
 
-- Added a generated PAP catalog and static GitHub Pages site. Pushes to `main` rebuild every example package, commit changed `examples/**/dist/*.pap` outputs after validation, refresh the rolling `latest` prerelease with firmware, PAPs, catalog, and checksums, and deploy the catalog-backed plugin/theme pages. Version tags publish the same assets as versioned Releases.
-- Made the Web Bluetooth installer's pairing-code field normalize uppercase characters and insert `XXXXX-XXXXX-X` separators while typing. Pages install links now preload the selected same-origin PAP into the installer without uploading it.
+- Reduced GitHub Pages to one unified Web Bluetooth installer for local plug-in and theme `.pap` files. The site no longer displays a package catalog, bundles PAP assets, builds documentation pages, or provides a separate theme route.
+- Removed automated PAP catalog generation, package regeneration, generated-file commits, and PAP Release assets from CI. Releases now contain only the verified firmware and checksum; the pairing-code field still normalizes uppercase `XXXXX-XXXXX-X` input before device connection and installation.
+- Added the official Pages configuration step and upgraded Pages deployment to v5. Existing sites deploy with `GITHUB_TOKEN`; a `PAGES_TOKEN` repository secret allows a fresh repository or fork to enable Pages automatically. Pages setup and firmware publication now run as independent jobs, so a Pages failure cannot block the BIN Release.
+- Removed the scheduled upstream-sync workflow; fork owners now synchronize `main` explicitly with GitHub's **Sync fork** control or their chosen Git workflow.
 - Updated the Night and Neo-Brutalism theme examples for the current sparse `styles` manifest and documented the shared Theme app lifecycle. Installed themes now have a detail page with two-step asynchronous uninstall; the built-in default is protected and an active theme falls back to it before deletion.
 - Reduced the fixed factory application partition from 3 MiB to 2 MiB and assigned the released 1 MiB to `appfs`. The current application still retains about 39% factory headroom while plug-ins, themes, staging, and private data gain a 5.94 MiB partition.
 - Removed the bundled Counter example app, its generated package, dedicated host test, validation hook, and stale documentation links; generic API documentation now uses a neutral demo.

@@ -79,25 +79,25 @@ function updateControls() {
   fileInput.disabled = installing;
   fileButton.disabled = installing;
   pairingInput.disabled = installing;
-  connectButton.disabled = installing || !bluetoothAvailable || !validPairingCode;
+  connectButton.disabled = installing || !bluetoothAvailable || !validPairingCode || !selectedFile;
   installButton.disabled = installing || !selectedFile || !connected;
   connectButton.textContent = connected ? "重新连接" : "连接设备";
   if (!installing && selectedFile && connected) {
     setProgress(0, "可以开始安装");
-  } else if (!installing && !selectedFile && !connected) {
-    setProgress(0, "等待文件和设备");
+  } else if (!installing && !validPairingCode) {
+    setProgress(0, "等待有效配对码");
   } else if (!installing && !selectedFile) {
-    setProgress(0, "等待插件包");
+    setProgress(0, "等待选择安装包");
   } else if (!installing && !connected) {
-    setProgress(0, "等待设备连接");
+    setProgress(0, "可以连接设备");
   }
 }
 
 function validatePackage(file) {
   if (!file) throw new Error("没有选择文件");
-  if (!file.name.toLowerCase().endsWith(".pap")) throw new Error("请选择 .pap 插件包");
-  if (file.size === 0) throw new Error("插件包是空文件，请重新导出");
-  if (file.size > MAX_PACKAGE_SIZE) throw new Error("插件包超过 4 MB，无法写入设备");
+  if (!file.name.toLowerCase().endsWith(".pap")) throw new Error("请选择 .pap 安装包");
+  if (file.size === 0) throw new Error("安装包是空文件，请重新导出");
+  if (file.size > MAX_PACKAGE_SIZE) throw new Error("安装包超过 4 MB，无法写入设备");
   return file;
 }
 
@@ -109,7 +109,7 @@ function selectPackage(file) {
     name.textContent = selectedFile.name;
     fileDetail.replaceChildren(name, ` · ${formatBytes(selectedFile.size)}`);
     fileButton.textContent = "更换文件";
-    setStatus("idle", "插件包已选择", "继续连接要安装到的 Passport。");
+    setStatus("idle", "安装包已选择", "配对码有效后即可连接要安装到的 Passport。");
   } catch (error) {
     selectedFile = null;
     fileInput.value = "";
@@ -118,21 +118,6 @@ function selectPackage(file) {
     setStatus("error", "无法使用这个文件", error.message);
   }
   updateControls();
-}
-
-async function loadPackageFromQuery() {
-  const packagePath = new URLSearchParams(window.location.search).get("package");
-  if (!packagePath) return;
-  const packageUrl = new URL(packagePath, document.baseURI);
-  if (packageUrl.origin !== window.location.origin || !packageUrl.pathname.endsWith(".pap")) {
-    throw new Error("安装包地址无效");
-  }
-  const response = await fetch(packageUrl, { cache: "no-store" });
-  if (!response.ok) throw new Error(`安装包读取失败（HTTP ${response.status}）`);
-  const blob = await response.blob();
-  const encodedName = packageUrl.pathname.split("/").pop() || "package.pap";
-  const name = decodeURIComponent(encodedName);
-  selectPackage(new File([blob], name, { type: "application/octet-stream" }));
 }
 
 function settleStatusWaiters(error) {
@@ -189,7 +174,7 @@ function onStatusNotification(event) {
   if (!installing) {
     const failed = failureStatuses.has(text);
     setStatus(failed ? "error" : text === "安装成功" ? "success" : "working",
-      failed ? "设备未能安装" : text === "安装成功" ? "插件安装完成" : "设备正在处理",
+      failed ? "设备未能安装" : text === "安装成功" ? "安装完成" : "设备正在处理",
       text);
   }
 }
@@ -204,7 +189,7 @@ function clearConnection(announce = true) {
   targetDeviceId = null;
   if (selectedDevice) selectedDevice.removeEventListener("gattserverdisconnected", onDisconnected);
   selectedDevice = null;
-  deviceDetail.textContent = "浏览器先显示附近的 Passport，连接后会用配对码核对目标设备。";
+  deviceDetail.textContent = "连接时会复核设备返回的完整配对码。";
   settleStatusWaiters(new Error("设备连接已断开"));
   if (announce) setStatus("error", "设备连接已断开", "请重新选择 Passport 后再安装。");
   updateControls();
@@ -268,7 +253,7 @@ async function connectDevice() {
     codeLabel.className = "device-code";
     codeLabel.textContent = code;
     deviceDetail.replaceChildren("已连接 ", codeLabel, "；设备返回的配对码复核通过。");
-    setStatus("success", "设备已连接", `配对码 ${code} 已核对，可以安装插件。`);
+    setStatus("success", "设备已连接", `配对码 ${code} 已核对，可以安装所选内容。`);
   } catch (error) {
     if (candidate.gatt.connected) candidate.gatt.disconnect();
     throw error;
@@ -307,7 +292,7 @@ async function installPackage() {
 
   installing = true;
   updateControls();
-  setStatus("working", "正在读取插件包", "校验文件后会开始蓝牙传输。");
+  setStatus("working", "正在读取安装包", "校验文件后会开始蓝牙传输。");
   setProgress(0, "正在校验文件");
 
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -326,11 +311,11 @@ async function installPackage() {
     "设备没有确认接收，请重试"
   );
 
-  setStatus("working", "正在发送插件", "请保持设备开机并留在附近。");
+  setStatus("working", "正在发送安装包", "请保持设备开机并留在附近。");
   let lastProgressBytes = 0;
   for (let offset = 0; offset < bytes.length; offset += PACKAGE_CHUNK_SIZE) {
     const end = Math.min(offset + PACKAGE_CHUNK_SIZE, bytes.length);
-    await writeWithRetry(dataCharacteristic, bytes.subarray(offset, end), "发送插件");
+    await writeWithRetry(dataCharacteristic, bytes.subarray(offset, end), "发送安装包");
     if (end === bytes.length || end - lastProgressBytes >= 32 * 1024) {
       const ratio = end / bytes.length;
       setProgress(ratio, `${formatBytes(end)} / ${formatBytes(bytes.length)}`);
@@ -338,7 +323,7 @@ async function installPackage() {
     }
   }
 
-  setStatus("working", "设备正在安装", "传输完成，正在校验并写入插件。");
+  setStatus("working", "设备正在安装", "传输完成，正在校验并写入安装包。");
   setProgress(1, "传输完成，等待设备确认");
   const finalSequence = statusSequence;
   await writeWithRetry(controlCharacteristic, new Uint8Array([2]), "结束传输");
@@ -349,7 +334,7 @@ async function installPackage() {
     "等待设备安装结果超时"
   );
 
-  setStatus("success", "插件安装完成", "现在可以在设备的插件管理中打开它。");
+  setStatus("success", "安装完成", "现在可以在 Passport 上使用所安装的插件或主题。");
   setProgress(1, "安装完成");
 }
 
@@ -399,7 +384,7 @@ pairingInput.addEventListener("input", () => {
     const completeButInvalid = compactLength >= 11;
     pairingInput.setAttribute("aria-invalid", completeButInvalid ? "true" : "false");
     deviceDetail.textContent = !pairingInput.value.trim()
-      ? "浏览器先显示附近的 Passport，连接后会用配对码核对目标设备。"
+      ? "输入完整配对码后，再选择要安装的插件或主题。"
       : completeButInvalid
         ? error.message
         : "继续输入完整配对码，格式为 XXXXX-XXXXX-X。";
@@ -435,7 +420,7 @@ installButton.addEventListener("click", async () => {
   try {
     await installPackage();
   } catch (error) {
-    setStatus("error", "插件安装失败", `${error.message}。请确认设备仍在附近后重试。`);
+    setStatus("error", "安装失败", `${error.message}。请确认设备仍在附近后重试。`);
   } finally {
     installing = false;
     updateControls();
@@ -451,7 +436,3 @@ if (!window.isSecureContext) {
 } else {
   updateControls();
 }
-
-loadPackageFromQuery().catch((error) => {
-  setStatus("error", "无法读取安装包", error.message);
-});

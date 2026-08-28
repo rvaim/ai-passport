@@ -1,4 +1,4 @@
-name: Verify, publish, and deploy
+name: Verify, release, and deploy
 
 on:
   pull_request:
@@ -17,45 +17,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  package:
-    name: Validate and pack PAPs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-
-      - name: Pack repository PAPs
-        env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-        run: |
-          set -euo pipefail
-          publish_dir="$RUNNER_TEMP/pap-publish"
-          mkdir -p "$publish_dir/packages" "$publish_dir/repo"
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            mode=--check
-          else
-            mode=--write
-          fi
-          python3 tools/build_pap_catalog.py "$mode" \
-            --prune \
-            --catalog "$publish_dir/catalog.json" \
-            --packages-dir "$publish_dir/packages"
-          while IFS= read -r package; do
-            destination="$publish_dir/repo/$package"
-            mkdir -p "$(dirname "$destination")"
-            cp "$package" "$destination"
-          done < <(find examples -type f -path '*/dist/*.pap' -print | sort)
-
-      - name: Upload generated PAPs and catalog
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: pap-publish-${{ github.run_id }}
-          path: ${{ runner.temp }}/pap-publish
-          if-no-files-found: error
-          retention-days: 7
-
   static:
     name: Repository and host checks
-    needs: package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -64,25 +27,6 @@ jobs:
         run: |
           actionlint_bin="$(./tools/install-actionlint.sh "$RUNNER_TEMP/actionlint")"
           echo "ACTIONLINT_BIN=${actionlint_bin}" >> "$GITHUB_ENV"
-
-      - name: Apply generated PAPs for validation
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: pap-publish-${{ github.run_id }}
-          path: ${{ runner.temp }}/pap-publish
-
-      - name: Restore generated PAP paths
-        run: |
-          set -euo pipefail
-          artifact_root="$RUNNER_TEMP/pap-publish/repo"
-          while IFS= read -r tracked; do
-            if [ ! -f "$artifact_root/$tracked" ]; then
-              rm -f "$tracked"
-            fi
-          done < <(git ls-files 'examples/**/dist/*.pap')
-          if [ -d "$RUNNER_TEMP/pap-publish/repo/examples" ]; then
-            cp -R "$artifact_root/examples/." examples/
-          fi
 
       - name: Validate repository and run host tests
         run: ./tools/validate.sh --static
@@ -119,92 +63,28 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  commit-dist:
-    name: Commit generated PAPs
+  release:
+    name: Publish firmware Release
     needs:
-      - package
       - static
       - firmware
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: true
-
-      - name: Download generated PAPs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: pap-publish-${{ github.run_id }}
-          path: ${{ runner.temp }}/pap-publish
-
-      - name: Sync generated dist files
-        run: |
-          set -euo pipefail
-          artifact_root="$RUNNER_TEMP/pap-publish/repo"
-          while IFS= read -r tracked; do
-            if [ ! -f "$artifact_root/$tracked" ]; then
-              rm -f "$tracked"
-            fi
-          done < <(git ls-files 'examples/**/dist/*.pap')
-          if [ -d "$artifact_root/examples" ]; then
-            while IFS= read -r package; do
-              destination="${package#"$artifact_root/"}"
-              mkdir -p "$(dirname "$destination")"
-              cp "$package" "$destination"
-            done < <(find "$artifact_root/examples" -type f -path '*/dist/*.pap' -print | sort)
-          fi
-
-      - name: Commit and push generated PAPs
-        run: |
-          set -euo pipefail
-          if git diff --quiet -- ':(glob)examples/**/dist/*.pap'; then
-            echo "PAP outputs are already current"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- ':(glob)examples/**/dist/*.pap'
-          git diff --cached --check
-          git commit -m "chore(artifacts): refresh PAP packages"
-          git push origin HEAD:main
-
-  publish:
-    name: Publish Release and Pages artifact
-    needs:
-      - package
-      - static
-      - firmware
-      - commit-dist
     if: >-
       github.event_name != 'pull_request' &&
-      needs.package.result == 'success' &&
       needs.static.result == 'success' &&
-      needs.firmware.result == 'success' &&
-      (needs['commit-dist'].result == 'success' || needs['commit-dist'].result == 'skipped')
+      needs.firmware.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pages: write
-      id-token: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - name: Download PAPs and firmware
+      - name: Download verified firmware
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: firmware-${{ github.run_id }}
           path: ${{ runner.temp }}/firmware
 
-      - name: Download PAP catalog
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: pap-publish-${{ github.run_id }}
-          path: ${{ runner.temp }}/pap-publish
-
-      - name: Prepare release tag and assets
+      - name: Prepare release tag and firmware assets
         run: |
           set -euo pipefail
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
@@ -216,22 +96,7 @@ jobs:
           release_dir="$RUNNER_TEMP/release-assets"
           mkdir -p "$release_dir"
           cp "$RUNNER_TEMP/firmware/FoloToy-AI-Passport-full.bin" "$release_dir/"
-          cp "$RUNNER_TEMP/pap-publish/packages/"*.pap "$release_dir/"
-          cp "$RUNNER_TEMP/pap-publish/catalog.json" "$release_dir/catalog.json"
-          sha256sum "$release_dir"/* > "$release_dir/SHA256SUMS"
-
-      - name: Install site dependencies
-        run: npm ci --prefix site --ignore-scripts --no-audit --no-fund
-
-      - name: Build GitHub Pages site
-        run: |
-          node site/build.mjs \
-            --output "$RUNNER_TEMP/site" \
-            --catalog "$RUNNER_TEMP/pap-publish/catalog.json" \
-            --packages "$RUNNER_TEMP/pap-publish/packages" \
-            --repository "$GITHUB_REPOSITORY" \
-            --ref "$GITHUB_SHA" \
-            --release-tag "$RELEASE_TAG"
+          sha256sum "$release_dir/FoloToy-AI-Passport-full.bin" > "$release_dir/SHA256SUMS"
 
       - name: Update GitHub Release
         env:
@@ -258,6 +123,32 @@ jobs:
           "${release_command[@]}"
           gh release upload "$RELEASE_TAG" "$release_dir"/* --clobber
 
+  pages:
+    name: Configure and upload Pages artifact
+    needs:
+      - static
+      - firmware
+    if: >-
+      github.event_name != 'pull_request' &&
+      needs.static.result == 'success' &&
+      needs.firmware.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Configure or enable GitHub Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+        with:
+          enablement: ${{ secrets.PAGES_TOKEN != '' }}
+          token: ${{ secrets.PAGES_TOKEN || github.token }}
+
+      - name: Build GitHub Pages installer
+        run: node site/build.mjs --output "$RUNNER_TEMP/site"
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
@@ -265,8 +156,8 @@ jobs:
 
   deploy-pages:
     name: Deploy GitHub Pages
-    needs: publish
-    if: needs.publish.result == 'success'
+    needs: pages
+    if: needs.pages.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -277,4 +168,4 @@ jobs:
     steps:
       - name: Deploy site
         id: deployment
-        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

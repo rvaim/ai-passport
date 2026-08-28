@@ -6,8 +6,10 @@
 
 ## Unreleased
 
-- 新增生成式 PAP 目录和静态 GitHub Pages 网站。推送到 `main` 时会重新打包所有示例插件，在检查通过后提交发生变化的 `examples/**/dist/*.pap`，用固件、PAP、目录和校验和刷新滚动的 `latest` 预发布版本，并部署读取该目录的网站；版本 Tag 会用同样的产物发布版本 Release。
-- 网页安装器的配对码输入框现在会边输入边转换为大写，并自动插入 `XXXXX-XXXXX-X` 分隔符。Pages 的安装链接会把选中的同源 PAP 预加载到安装器，文件不会上传。
+- 将 GitHub Pages 精简为一个统一的 Web Bluetooth 安装器，用于选择本地插件或主题 `.pap`。网站不再展示包目录、内置 PAP、构建文档页面或提供独立主题入口。
+- 从 CI 移除自动 PAP 目录生成、包重新生成、生成文件提交与 PAP Release 资源。Release 现在只包含经过验证的固件与校验和；配对码输入框仍会在连接和安装前规范化为大写 `XXXXX-XXXXX-X`。
+- 新增 GitHub 官方 Pages 配置步骤，并把 Pages 部署升级到 v5。已启用站点使用 `GITHUB_TOKEN` 即可部署；新仓库或 fork 配置 `PAGES_TOKEN` 仓库 Secret 后可自动启用 Pages。Pages 配置与固件发布现为独立任务，因此 Pages 失败不会阻断 BIN Release。
+- 移除定时上游同步工作流；fork 所有者现在通过 GitHub 的 **Sync fork** 或自选 Git 流程显式同步 `main`。
 - 更新夜间主题与新粗野主义主题示例，使其使用当前稀疏 `styles` Manifest，并补充系统“主题”App 生命周期说明。已安装主题现在拥有详情页和两步确认的异步卸载流程；内置默认主题受保护，删除当前主题前会先切回默认主题。
 - 将固定 Factory App 分区从 3 MiB 缩小到 2 MiB，并把释放的 1 MiB 全部分配给 `appfs`。当前应用仍保留约 39% 的 Factory 余量，插件、主题、staging 和私有数据分区则扩大到 5.94 MiB。
 - 移除仓库内置的计数器示例插件、生成的包、专用主机测试、验证入口和过时文档链接；通用 API 文档现改用中性的示例 Demo。
